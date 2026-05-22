@@ -81,16 +81,10 @@ function create_params(N)
 end
 
 ### Create Param object for fourier solve
-function create_fparams(N)
+function create_fparams(N, α,  v, f_fn)
     xx = linspace(0, 1, N)
-
-    u_exact = sin.(2pi .* xx)
-    # α - a real
-    α = 1.
-    # V(x) - a function
-    V = 1.0 .+ 0.5 .* cos.(2π .* xx)
-    #f(x) - a function
-    f = 4π^2*sin.(2π .* xx) + α .* u_exact.^3 + V .* u_exact
+    V = v(xx)
+    f = f_fn(xx)
     
     return FourierParams(N, α, V, f,  collect(2π .* fftfreq(N, N)))
 end
@@ -156,23 +150,23 @@ function backward_AD(F, p, u)
     return J
 end
 
-function Newton_solve_fourier(p::FourierParams, n_iter; verbose=false, tol=1e-16)
-    u = zeros(p.N) # u_0
-    for i in 1:n_iter
-        res = F_fourier(u, p)
-        L = (result, du) -> result .= -diff2_fourier(du, p.Ks) + 3 * p.α .* u .^2 .* du .+ p.V .* du
-        op = LinearOperator(Float64, p.N, p.N, true, true, L)
-        step, stats = cg(op, res)
-        if(verbose)
-            println("Iteration: ", i,",\n stats: ", stats )
-        end
-        u = u - step
-        if(sum(step.^2)<tol)
-            if(verbose)
-                println("Took ", i, "iterations to converge")
-            end
-            return u
-        end
-    end
-    return u
-end
+# function Newton_solve_fourier(p::FourierParams, n_iter; verbose=false, tol=1e-16)
+#     u = zeros(p.N) # u_0
+#     for i in 1:n_iter
+#         res = F_fourier(u, p)
+#         L = (result, du) -> result .= -diff2_fourier(du, p.Ks) + 3 * p.α .* u .^2 .* du .+ p.V .* du
+#         op = LinearOperator(Float64, p.N, p.N, true, true, L)
+#         step, stats = cg(op, res)
+#         if(verbose)
+#             println("Iteration: ", i,",\n stats: ", stats )
+#         end
+#         u = u - step
+#         if(sum(step.^2)<tol)
+#             if(verbose)
+#                 println("Took ", i, "iterations to converge")
+#             end
+#             return u
+#         end
+#     end
+#     return u
+# end
