@@ -54,7 +54,10 @@ function Newton_solve_fourier(p::FourierParams, n_iter; tol=1e-16)
         P_op = LinearOperator(Float64, p.N, p.N, true, true, P)
 
         # step, stats = cg(op, res)
-        step, _ = cg(op, res, M=P_op)
+        step, stats = try cg(op, res, M=P_op, atol=1e-13, rtol=1e-11) catch e minres(op, res, M=P_op) end
+        if !stats.solved
+            step, _ = minres(op, res, M=P_op)
+        end
         u = u - step
         if(l2norm(step)<tol)
             return u
