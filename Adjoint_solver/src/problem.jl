@@ -11,7 +11,7 @@ end
 
 function Problem(;N::Int, L::Float64=2π, α::Float64=1., f)
     x  = collect(range(0, L; length = N + 1))[1:N]
-    ks = wavenumbers(bc, N, L)
+    ks = 2π * collect(fftfreq(N, N)) ./ L
     fv = f isa Function ? f.(x) : f
     Problem(L, N, x, ks, α, fv)
 end

@@ -2,3 +2,9 @@ name = "Adjoint_solver"
 uuid = "7818aadc-9eff-48ee-87e8-ddb243a29413"
 version = "0.1.0"
 authors = ["Sipan Bareyan <bareyan.sipan@gmail.com>"]
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+
+[compat]
+DataFrames = "1.8.2"

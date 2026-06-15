@@ -1,6 +1,7 @@
+include("../regularization.jl")
 
-function adjoint_gradient(p, V, u_target; β, R_grad)
-    u = Newton_solve_fourier(p, V, 20)
+function adjoint_gradient(p, V, u_target; reg::Regularizer=NoReg())
+    u = Newton_solve(p, V)
     
     L = (result, du) -> result .= -diff2_fourier(du, p.ks) + 3 * p.α .* u .^2 .* du .+ V .* du
     op = LinearOperator(Float64, p.N, p.N, true, true, L)
@@ -10,6 +11,6 @@ function adjoint_gradient(p, V, u_target; β, R_grad)
     P_op = LinearOperator(Float64, p.N, p.N, true, true, P)
 
     λ, _ = cg(op, u - u_target, M = P_op, atol=1e-13, rtol=1e-11)
-    grad = -2λ .* u
-    return u, grad + β .* R_grad
+    grad = (p.L/p.N) .*  (-2λ .* u)
+    return u, grad + grad_R(p, V, reg)
 end

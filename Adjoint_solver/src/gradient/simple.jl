@@ -10,21 +10,23 @@ function FD(p::Problem, loss, V, target;eps=1e-8)
     return grad
 end
 
-## Automatic Differentiation
-function Forward_AD(p::Problem, loss, V, target)
-    res = zeros(p.N)
-    for i in 1:p.N
-        v = zeros(p.N)
+
+## AD methods (forward/reverse) using Enzyme
+function Forward_AD(loss, V)
+    res = zeros(length(V))
+    for i in 1:length(V)
+        v = zeros(length(V))
         v[i] = 1
-        (col,) = autodiff(set_runtime_activity(Forward), loss, Duplicated(V, v), Const(target))
+        (col,) = autodiff(set_runtime_activity(Forward), Const(loss), Duplicated(V, v))
         res[i] = col
     end
-    # gradient(Forward, loss, V, Const(target))
     return res
+    # grad, = gradient(set_runtime_activity(Forward), loss, Duplicated(V); chunk=Val(8))
+    # return grad
 end
 
-function Backward_AD(p::Problem, loss, V, target)
-    v = zeros(p.N)
-    autodiff(set_runtime_activity(Reverse), loss, Active,  Duplicated(V, v), Const(target))
+function Backward_AD(loss, V)
+    v = zeros(length(V))
+    autodiff(set_runtime_activity(Reverse), Const(loss), Active,  Duplicated(V, v))
     return v
 end

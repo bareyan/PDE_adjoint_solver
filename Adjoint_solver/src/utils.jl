@@ -27,7 +27,7 @@ end
 
 
 ## AD Friendly conjugate gradient
-function cg_ad(applyA, b; M, n_iter, tol=1e-12)
+function cg_ad(applyA, b; M=x ->x, n_iter=1000, tol=1e-12)
     x  = zeros(eltype(b), length(b))
     r  = b - applyA(x)
     z  = M(r)
