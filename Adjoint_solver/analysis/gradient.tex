@@ -6,20 +6,21 @@
 
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{graphicx}
+\usepackage{float}                 % [H] placement for the appendix tables
 \usepackage{booktabs}
 \usepackage{caption}
 \usepackage{siunitx}
-\usepackage[margin=2.5cm]{geometry}
+\usepackage[margin=2cm]{geometry}
 \usepackage{microtype}
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
 \usepackage{cleveref}
 
 % --- artifacts produced by gradient.jl -------------------------------------
-% Figures: savefig(...) PDF into figures/.  Tables: PrettyTables LaTeX backend
-% into generated/.  Each renders as a placeholder until the script has run, so
-% the file always compiles.  Paths are explicit so the existence test and the
-% include agree (\graphicspath does not affect \IfFileExists).
+% Tables (PrettyTables LaTeX) and figures (savefig PDF) are written into
+% gradient_data/.  Each renders as a placeholder until the script has run, so the
+% file always compiles.  Paths are explicit so the existence test and the include
+% agree (\graphicspath does not affect \IfFileExists).
 \newcommand{\incfig}[2][0.82\linewidth]{%
   \IfFileExists{#2}%
     {\includegraphics[width=#1]{#2}}%
@@ -41,21 +42,23 @@
 
 \begin{abstract}
 \noindent
-We compare methods for computing the gradient $g=\nabla_V L$ of the misfit
-\(L(V)=\int_0^{2\pi}\bigl(u(V)-u_0\bigr)^2\,dx\), where the state $u(V)$ solves
+We compare methods for computing the gradient $g=\nabla_V I$ of the misfit
+\(I(V)=\int_0^{2\pi}\bigl(u(V)-u_0\bigr)^2\,dx\), where the state $u(V)$ solves
 the discretized nonlinear equation $F(u,V)=0$ by Newton's method. The state
-solve and the adjoint construction are implemented in the library; we study only the
-\emph{compute cost}, \emph{memory}, and \emph{accuracy} of the gradient, and how
-each scales with the number of parameters $N$. We contrast finite differences,
+solve and the adjoint construction are implemented in the library; we study only
+the \emph{compute cost}, \emph{memory}, and \emph{accuracy} of the gradient, and
+how each scales with the number of parameters $N$. We contrast finite differences,
 automatic differentiation of the loss (forward and reverse), the hand-written
-adjoint, and AD equipped with a rule with different AD libraries in Julia.
+adjoint, and AD equipped with a rule for the state solve, across the Julia AD
+libraries ForwardDiff, Zygote and Mooncake.
 \end{abstract}
 
 \section{Methods}
 \label{sec:methods}
 
-The gradient maps the $N$ entries of the discretized potential $V$ to a scalar,
-so the question that matters is how its cost grows with $N$.
+The loss maps the $N$ entries of the discretized potential $V$ to a scalar, so its
+gradient has one component per entry. The question that matters is how the cost of
+computing it grows with $N$.
 
 \begin{itemize}
   \item \textbf{Finite differences (FD).} Perturb each entry in turn: $N{+}1$
@@ -69,20 +72,41 @@ so the question that matters is how its cost grows with $N$.
   gradient, but it traces the Newton iteration and stores every intermediate
   state, so memory grows with the iteration count.
   \item \textbf{Adjoint (analytic).} One extra linear solve with the Newton-step
-  operator at the converged solution: cost independent of $N$ and comparable to
-  a single state solve. This is the reference.
-  \item \textbf{Rule-based AD.} A custom rule for the state solve makes the AD
-  tool compose the analytic adjoint instead of differentiating the iteration. It
-  runs on the production solver and stays differentiable inside a larger pipeline.
+  operator at the converged solution (derived below): a fixed number of solves,
+  independent of $N$, comparable to a single state solve. This is the reference.
+  \item \textbf{Rule-based AD.} A custom rule for the \emph{state solve} makes the
+  AD tool insert the analytic adjoint --- a pullback for $u(V)$ --- instead of
+  differentiating the Newton iteration. Because the rule sits on the solver rather
+  than on our particular loss, it is reusable and composes inside any larger
+  differentiable pipeline, while running on the production solver.
 \end{itemize}
+
+\paragraph{The adjoint gradient.}
+At a converged state, $F(u(V),V)=0$. Differentiating in $V$ and writing
+$L=\partial F/\partial u$ for the (self-adjoint) Newton operator at $u$ and
+$\partial F/\partial V=\operatorname{diag}(u)$ (the term $Vu$ is linear in $V$),
+\[
+  L\,\delta u + \operatorname{diag}(u)\,\delta V = 0
+  \quad\Longrightarrow\quad
+  \delta u = -L^{-1}\operatorname{diag}(u)\,\delta V .
+\]
+The misfit varies as $\delta I = \tfrac{4\pi}{N}\langle u-u_0,\delta u\rangle$.
+Since $L$ is HPD, $L^{-1}$ is self-adjoint, so with the adjoint solve
+$L\lambda = u-u_0$,
+\[
+  \delta I
+  = -\tfrac{4\pi}{N}\langle L^{-1}(u-u_0),\operatorname{diag}(u)\,\delta V\rangle
+  = \big\langle -\tfrac{4\pi}{N}\operatorname{diag}(u)\,\lambda,\ \delta V\big\rangle .
+\]
+Hence $\nabla_V I = -\tfrac{4\pi}{N}\operatorname{diag}(u)\,\lambda$: a single HPD
+(Krylov) solve at the converged $u$, independent of $N$.
 
 \paragraph{Differentiating the linear solve.}
 Every reverse-mode path carries a custom rule for the inner conjugate-gradient
-solve, so the \emph{linear} system is never differentiated through; AD sees only
-the \emph{Newton} iteration. (Forward mode simply propagates duals through the
-fixed-iteration solver.) The naive--versus--ruled comparison then measures the
-cost of unrolling Newton against the cost of replacing it by the adjoint rule,
-not the easily avoided cost of unrolling CG.
+solve, so the linear system is never differentiated through; forward mode simply
+propagates duals through the Newton solver and the CG. The naive-versus-ruled comparison then
+measures the cost of unrolling Newton against the cost of replacing it by the
+adjoint rule.
 
 \section{Theoretical complexity}
 \label{sec:complexity}
@@ -94,14 +118,14 @@ costs $T_{\mathrm{lin}}=\mathcal O(n_c\,N\log N)$ and one state (Newton) solve
 costs $T_{\mathrm{sol}}=n_N\,T_{\mathrm{lin}}$. We express each gradient cost in
 these units; \cref{tab:complexity} summarizes.
 
-\begin{table}[t]
+\begin{table}[h]
   \centering
   \caption{Cost of one gradient evaluation. $T_{\mathrm{sol}}=n_N\,T_{\mathrm{lin}}$
     is one state solve, $T_{\mathrm{lin}}=\mathcal O(n_c\,N\log N)$ one linear solve.}
   \label{tab:complexity}
   \begin{tabular}{lcccc}
     \toprule
-    Method & State solves & Compute & Memory & Accuracy \\
+    Method & State solves & Compute & Peak memory & Accuracy \\
     \midrule
     Finite differences          & $N{+}1$      & $\mathcal O(N\,T_{\mathrm{sol}})$ & $\mathcal O(N)$      & $\mathcal O(\sqrt{\varepsilon_{\mathrm{mach}}})$ \\
     Forward AD (duals)           & $\sim N$     & $\mathcal O(N\,T_{\mathrm{sol}})$ & $\mathcal O(N)$      & machine, at iterate \\
@@ -112,40 +136,49 @@ these units; \cref{tab:complexity} summarizes.
   \end{tabular}
 \end{table}
 
-\paragraph{Two regimes.}
-FD and forward-mode AD cost $\mathcal O(N)$ state solves --- the price of probing
-one input direction at a time. Reverse-mode AD, the adjoint and rule-based AD
-return the \emph{entire} gradient at $\mathcal O(1)$ state solves, comparable to a
-single loss evaluation and independent of $N$: the classical reverse-mode
-result~\cite{johnson,levitt}.
 
 \paragraph{Within the cheap group.}
 What separates the $\mathcal O(1)$-solve methods is the constant and the memory.
-The hand adjoint adds one linear solve and stores nothing extra. Naive
-reverse-mode redoes the iteration backward --- $\approx n_N$ extra linear solves
+The hand adjoint adds one linear solve and stores nothing extra. 
+Naive reverse-mode redoes the iteration backward - $\approx n_N$ extra linear solves
 ($\approx 2\times$ the adjoint) and a tape of the $n_N$ Newton iterates
 ($\mathcal O(n_N N)$ memory). Rule-based AD injects exactly that adjoint,
 recovering the single-solve cost and $\mathcal O(N)$ memory while staying
-composable. On accuracy, forward- and reverse-mode AD differentiate the program
---- the $n_N$-th iterate $u_{n_N}(V)$ --- returning the exact derivative of an
-approximate solution, off by $\mathcal O(\text{Newton residual})$; the adjoint
-and the state-solve rule differentiate the converged solution through one exact
-linear solve, matching to the linear-solve tolerance.
+composable. 
 
 \section{Protocol}
 \label{sec:protocol}
 
-We fix a well-conditioned instance --- a forcing with nonzero mean, so the state
-stays bounded away from zero --- and a single evaluation point $V_0$. Before any
-timing, every gradient is checked against finite differences, so a method that is
-fast only because it is wrong is excluded. \emph{Time} is the minimum over
-warmed-up samples (BenchmarkTools, JIT excluded); \emph{memory} is the allocation
-per call; \emph{accuracy} is the relative $\ell_2$ deviation from the adjoint
-gradient. Times are also read in units of one state solve, the natural unit of
-\cref{tab:complexity}. The study runs over $N=5,\dots,500$. The AD tools are
-ForwardDiff (forward mode) and Mooncake and Zygote (reverse mode); the
+We fix a well-conditioned instance: 
+\begin{enumerate}
+  \item a forcing with nonzero mean, so the state
+stays bounded away from zero 
+  \item a single evaluation point $V_0$.
+\end{enumerate}
+
+\noindent We measure: \footnote{\IfFileExists{gradient_data/meta.tex}{\input{gradient_data/meta.tex}}{Provenance
+(CPU, library versions, BLAS threads) is stamped here once gradient.jl has run.}}
+\begin{enumerate}
+\item \emph{Time} is the minimum over warmed-up samples (BenchmarkTools, JIT excluded);
+\item \emph{allocations} is the total bytes allocated per call : cumulative heap churn
+over the call
+\item \emph{accuracy} is the relative $\ell_2$ deviation from the analytic adjoint.
+\end{enumerate}
+The study runs over $N=5,\dots,500$. The AD
+tools are ForwardDiff (forward mode) and Mooncake and Zygote (reverse mode); the
 reverse-mode paths use the CG rule, and the rule-based paths add the state-solve
 rule.
+
+\paragraph{The naive vs derived comparison.}
+For the naive AD implementation, we avoid using fft and the Krylov library cg,
+which forces an unoptimized solve for a dense linear system differentiated through
+a dense $\mathcal O(N^2)$ reimplementation of the state solve. This keeps the
+Newton iteration AD-traceable. By contrast, FD, the adjoint, and the rule-based
+paths all use the production $\mathcal O(N\log N)$ spectral solver. The naive
+timings therefore carry a dense-algebra penalty on top of the differentiation
+cost and are not directly comparable to the production methods. The clean,
+like-for-like comparison is \emph{adjoint versus rule-based}, both on the same
+production solver.
 
 \section{Results}
 \label{sec:results}
@@ -154,47 +187,57 @@ rule.
 \Cref{tab:accuracy,fig:accuracy} report the relative $\ell_2$ deviation of each
 gradient from the analytic adjoint reference at $N=500$.
 
-\begin{table}[t]
+\begin{figure}[H]
   \centering
-  \caption{Relative $\ell_2$ deviation of each gradient from the analytic
-    adjoint reference.}
-  \label{tab:accuracy}
-  \inctbl{gradient_data/accuracy_table.tex}
-\end{table}
-
-\begin{figure}[t]
-  \centering
-  \incfig{gradient_data/accuracy_vs_adjoint.pdf}
-  \caption{Relative $\ell_2$ error of each method against the analytic adjoint (log scale).}
-  \label{fig:accuracy}
+  \begin{minipage}{0.49\linewidth}\centering
+    \captionof{table}{Relative $\ell_2$ deviation of each gradient from the
+      analytic adjoint at $N=500$.}\label{tab:accuracy}
+    \inctbl{gradient_data/accuracy_table.tex}
+  \end{minipage}\hfill
+  \begin{minipage}{0.49\linewidth}\centering
+    \incfig[\linewidth]{gradient_data/accuracy_vs_adjoint.pdf}
+    \captionof{figure}{Relative $\ell_2$ error of each method against the analytic
+      adjoint (log scale); the adjoint itself ($=0$, the reference) is omitted from
+      the log axis.}\label{fig:accuracy}
+  \end{minipage}
 \end{figure}
 
-\noindent\fillin{State the FD deviation, the naive-AD deviation (the iterate gap,
-of order the Newton residual), and confirm that rule-based AD sits at the adjoint
-level rather than the iterate level.}
+\noindent The three inexact methods separate by mechanism. Finite differences sit
+near the step-size floor, $\sqrt{\varepsilon_{\mathrm{mach}}}\approx 10^{-6}$. The extra error comes from the fact that we differentiate through a solver that is not perfect, so does not give exact analytical solution.
+Naive AD paths differ by how they treat the inner solve (\S\ref{sec:methods}):
+reverse mode carries the exact CG rule, so its only error is the \emph{outer}
+Newton iterate gap - it differentiates the $100$-step iterate, not the converged
+$u$ --- giving $\approx 2\times10^{-6}$; forward mode has no such rule and
+propagates duals through the truncated CG, adding a \emph{CG-truncation} term to
+the tangent on top of that same iterate gap, hence the larger $\approx
+7\times10^{-6}$. Rule-based AD bypasses both: it injects the analytic adjoint and
+lands at $\approx 5\times10^{-12}$ for both libraries --- the linear-solve
+tolerance --- reproducing the adjoint rather than the iterate.
 
 \paragraph{Cost at fixed size.}
-\Cref{tab:cost} gives wall time and allocations at $N=500$, with each time
-also as a multiple of one state solve.
+\Cref{tab:cost} gives wall time and allocations per gradient evaluation at $N=500$.
 
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time and allocations per gradient evaluation at fixed $N$.}
   \label{tab:cost}
   \inctbl{gradient_data/cost_table.tex}
 \end{table}
 
-\noindent\fillin{Quote the adjoint and rule-based times in units of one solve
-($\approx 1$--$2$), the FD and forward-AD slowdown ($\sim N$ solves), and the
-reverse-naive allocation relative to the adjoint, where the $\mathcal O(n_N N)$
-tape shows up even when the time is competitive.}
+\noindent At $N=500$ the adjoint takes $\sim\!8$\,ms and allocates $28$\,MB.
+Rule-based Zygote is indistinguishable from it ($\sim\!8$\,ms, $27$\,MB), while
+rule-based Mooncake is about $2\times$ in both time and allocations. The naive
+paths are far heavier: naive Zygote is $\sim\!30\times$ slower and allocates
+$1.6$\,GB, and naive Mooncake and forward-mode AD reach tens of seconds, allocating
+$\sim\!210$\,GB and $\sim\!130$\,GB. Finite differences, needing $N{+}1$ solves, is
+$\sim\!670\times$ the adjoint.
 
 \paragraph{Scaling in $N$.}
-\Cref{fig:scaling-time,fig:scaling-mem} show time and memory against $N$ on
-log--log axes; the per-$N$ tables below give the backing data, one table per
-grid size, each reporting the relative $\ell_2$ error against the analytic adjoint.
+\Cref{fig:scaling-time,fig:scaling-mem} show time and allocations against $N$ on
+log--log axes; the backing data is tabulated per grid size in the appendix, each
+table also reporting the relative $\ell_2$ error against the analytic adjoint.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \begin{minipage}{0.49\linewidth}\centering
     \incfig[\linewidth]{gradient_data/scaling_time.pdf}
@@ -206,35 +249,47 @@ grid size, each reporting the relative $\ell_2$ error against the analytic adjoi
   \end{minipage}
 \end{figure}
 
-\inctbl{gradient_data/scaling_table.tex}
 
-\noindent\fillin{Read off the slopes: FD and forward-AD have unit slope in time
-($\mathcal O(N)$ solves); reverse-mode, adjoint and rule-based are flat. In
-memory, reverse-naive grows with $N$ while the others stay flat. Give the
-crossover $N$ beyond which the adjoint is decisively cheaper than FD.}
+\noindent The slopes confirm the two regimes: FD and forward-mode AD grow linearly
+in $N$ (one solve per parameter), while the adjoint and both rule-based paths stay
+flat per gradient. In allocations, naive reverse-mode grows with its
+$\mathcal O(n_N N)$ tape, whereas the adjoint and rule-based paths stay flat. The
+adjoint is cheaper
+than FD across the whole range --- already $\sim\!6\times$ at $N=5$ --- and the
+margin widens linearly with $N$.
 
 \section{Discussion}
 \label{sec:discussion}
 
-The measurements confirm \cref{tab:complexity}. Finite differences and
-forward-mode AD scale as $\mathcal O(N)$ state solves and are usable only as
-baselines. Reverse-mode AD, the adjoint, and rule-based AD all compute the full
-gradient at the cost of $\mathcal O(1)$ solves; within that group the hand
-adjoint is the cheapest and lightest, naive reverse-mode pays the
-Newton-unrolling factor in both compute ($\approx 2\times$) and memory
-($\mathcal O(n_N N)$), and rule-based AD recovers the adjoint's efficiency while
-remaining composable. For production the hand adjoint is the clear choice;
-rule-based AD is preferable when the gradient must chain with other
-differentiated code; naive differentiation is kept only as a baseline and a
-correctness cross-check.
+The measurements confirm \cref{tab:complexity} and sharpen it into a clear
+recommendation. Finite differences, forward-mode AD and naive reverse-mode AD are
+all orders of magnitude slower and heavier than the adjoint --- from $\sim\!30\times$
+(naive Zygote), through $\sim\!670\times$ (FD) at $N=500$ --- so they serve only as baselines and
+correctness cross-checks. The adjoint and the rule-based paths compute the full
+gradient in $\mathcal O(1)$ solves. Among these, rule-based Zygote matches the hand
+adjoint in both time and allocations, while rule-based Mooncake
+trails at about $2\times$.
 
-\paragraph{Reproducibility.}
-\IfFileExists{gradient_data/meta.tex}{\input{gradient_data/meta.tex}}{\fillin{run gradient.jl to stamp version/hardware provenance here}}
+Rule-based Zygote is therefore the method of choice for this problem: it recovers
+the analytic adjoint's speed, allocations and accuracy, yet stays a drop-in, composable
+rule on the production solver rather than a bespoke hand derivation --- which also
+makes Zygote the most effective Julia reverse-mode AD library here. Moreover, it directly inherits the 
+ChainRules rules and is compatible with the rest of the Julia AD ecosystem.
+Enzyme is another option, but remains the most unreliable and needs a lot of configuration and debugging to work with naive configuration, or other complicated situations. Mooncake is a good option for reverse-mode AD, but it is not as fast as Zygote and has some limitations in terms of composability.
+The hand adjoint remains the conceptual reference, and naive differentiation is kept only to validate
+the rules.
 
 \begin{thebibliography}{9}
   \bibitem{johnson} S.~G.~Johnson, \emph{Notes on Adjoint Methods for 18.335},
     MIT, 2006 (updated 2021).
   \bibitem{levitt} A.~Levitt, \emph{The Adjoint Trick}, 2020.
 \end{thebibliography}
+
+\section*{Appendix: statistics across $N$}
+\noindent The rule-based error is not constant across $N$: it tracks the adjoint
+solve's CG tolerance, growing from $\approx 3.5\times10^{-16}$ at $N=5$ to
+$\approx 5.6\times10^{-12}$ at $N=500$ once the solve becomes tolerance-limited.
+
+\inctbl{gradient_data/scaling_table.tex}
 
 \end{document}

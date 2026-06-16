@@ -1,4 +1,4 @@
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time, allocations and relative $\ell_2$ error against the analytic adjoint ($N = 5$).}
   \label{tab:scaling-N5}
@@ -7,17 +7,17 @@
   \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{time\_s} & \textbf{alloc\_bytes} & \textbf{rel\_err} \\
   \textit{String} & \textit{String} & \textit{String} & \textit{Float64} & \textit{Int64} & \textit{Float64} \\
   \midrule
-  FD & - & - & 0.00206272 & 761280 & 1.15524e-7 \\
-  adjoint & - & reverse & 0.000349728 & 141968 & 0.0 \\
-  naive & ForwardDiff & forward & 5.3978e-5 & 570864 & 1.51471e-5 \\
-  naive & Mooncake & reverse & 0.00107801 & 3163848 & 5.26179e-8 \\
-  naive & Zygote & reverse & 0.000428474 & 1095872 & 5.26179e-8 \\
-  ruled & Mooncake & reverse & 0.000696563 & 289904 & 3.50732e-16 \\
-  ruled & Zygote & reverse & 0.000367961 & 148384 & 3.50732e-16 \\
+  FD & - & - & 0.00181688 & 761280 & 1.15524e-7 \\
+  adjoint & - & - & 0.000329536 & 141968 & 0.0 \\
+  naive & ForwardDiff & forward & 5.0756e-5 & 570864 & 1.51471e-5 \\
+  naive & Mooncake & reverse & 0.00104616 & 3163848 & 5.26179e-8 \\
+  naive & Zygote & reverse & 0.000428973 & 1095872 & 5.26179e-8 \\
+  ruled & Mooncake & reverse & 0.000733333 & 289904 & 3.50732e-16 \\
+  ruled & Zygote & reverse & 0.000376294 & 148384 & 3.50732e-16 \\
   \bottomrule
 \end{tabular}
 \end{table}
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time, allocations and relative $\ell_2$ error against the analytic adjoint ($N = 10$).}
   \label{tab:scaling-N10}
@@ -26,17 +26,17 @@
   \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{time\_s} & \textbf{alloc\_bytes} & \textbf{rel\_err} \\
   \textit{String} & \textit{String} & \textit{String} & \textit{Float64} & \textit{Int64} & \textit{Float64} \\
   \midrule
-  FD & - & - & 0.00359994 & 1801072 & 1.8179e-7 \\
-  adjoint & - & reverse & 0.000374005 & 198912 & 0.0 \\
-  naive & ForwardDiff & forward & 0.000643048 & 2403760 & 1.64467e-5 \\
-  naive & Mooncake & reverse & 0.00258311 & 9582984 & 1.22867e-7 \\
-  naive & Zygote & reverse & 0.000476631 & 1842800 & 1.22867e-7 \\
-  ruled & Mooncake & reverse & 0.000747604 & 385504 & 3.53916e-16 \\
-  ruled & Zygote & reverse & 0.000382403 & 203792 & 3.53916e-16 \\
+  FD & - & - & 0.0038393 & 1801072 & 1.8179e-7 \\
+  adjoint & - & - & 0.000392349 & 198912 & 0.0 \\
+  naive & ForwardDiff & forward & 0.000601701 & 2403760 & 1.64467e-5 \\
+  naive & Mooncake & reverse & 0.00262237 & 9582984 & 1.22867e-7 \\
+  naive & Zygote & reverse & 0.000485439 & 1842800 & 1.22867e-7 \\
+  ruled & Mooncake & reverse & 0.000745418 & 385504 & 3.53916e-16 \\
+  ruled & Zygote & reverse & 0.00038248 & 203792 & 3.53916e-16 \\
   \bottomrule
 \end{tabular}
 \end{table}
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time, allocations and relative $\ell_2$ error against the analytic adjoint ($N = 25$).}
   \label{tab:scaling-N25}
@@ -45,17 +45,17 @@
   \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{time\_s} & \textbf{alloc\_bytes} & \textbf{rel\_err} \\
   \textit{String} & \textit{String} & \textit{String} & \textit{Float64} & \textit{Int64} & \textit{Float64} \\
   \midrule
-  FD & - & - & 0.0240583 & 9567904 & 3.42596e-7 \\
-  adjoint & - & reverse & 0.00101917 & 434576 & 0.0 \\
-  naive & ForwardDiff & forward & 0.00804734 & 26142800 & 1.26784e-5 \\
-  naive & Mooncake & reverse & 0.0134243 & 60995584 & 1.33311e-7 \\
-  naive & Zygote & reverse & 0.000881939 & 5693792 & 1.33311e-7 \\
-  ruled & Mooncake & reverse & 0.00207198 & 823232 & 2.98367e-16 \\
-  ruled & Zygote & reverse & 0.00107246 & 437152 & 2.98367e-16 \\
+  FD & - & - & 0.0219133 & 9567904 & 3.42596e-7 \\
+  adjoint & - & - & 0.000972388 & 434576 & 0.0 \\
+  naive & ForwardDiff & forward & 0.00804795 & 26142800 & 1.26784e-5 \\
+  naive & Mooncake & reverse & 0.0136601 & 60995584 & 1.33311e-7 \\
+  naive & Zygote & reverse & 0.000882954 & 5693792 & 1.33311e-7 \\
+  ruled & Mooncake & reverse & 0.00191381 & 823232 & 2.98367e-16 \\
+  ruled & Zygote & reverse & 0.00100916 & 437152 & 2.98367e-16 \\
   \bottomrule
 \end{tabular}
 \end{table}
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time, allocations and relative $\ell_2$ error against the analytic adjoint ($N = 50$).}
   \label{tab:scaling-N50}
@@ -64,17 +64,17 @@
   \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{time\_s} & \textbf{alloc\_bytes} & \textbf{rel\_err} \\
   \textit{String} & \textit{String} & \textit{String} & \textit{Float64} & \textit{Int64} & \textit{Float64} \\
   \midrule
-  FD & - & - & 0.0489131 & 32215600 & 5.58154e-7 \\
-  adjoint & - & reverse & 0.00102984 & 748624 & 0.0 \\
-  naive & ForwardDiff & forward & 0.0736605 & 159223304 & 1.26773e-5 \\
-  naive & Mooncake & reverse & 0.0479491 & 200426728 & 1.96469e-7 \\
-  naive & Zygote & reverse & 0.001944 & 18648224 & 1.96469e-7 \\
-  ruled & Mooncake & reverse & 0.00199203 & 1398688 & 5.57772e-12 \\
-  ruled & Zygote & reverse & 0.00104815 & 736256 & 5.57772e-12 \\
+  FD & - & - & 0.0472682 & 32215600 & 5.58154e-7 \\
+  adjoint & - & - & 0.000989023 & 748624 & 0.0 \\
+  naive & ForwardDiff & forward & 0.0592777 & 159223304 & 1.26773e-5 \\
+  naive & Mooncake & reverse & 0.0484687 & 200426728 & 1.96469e-7 \\
+  naive & Zygote & reverse & 0.00192859 & 18648224 & 1.96469e-7 \\
+  ruled & Mooncake & reverse & 0.00193407 & 1398688 & 5.57772e-12 \\
+  ruled & Zygote & reverse & 0.000984608 & 736256 & 5.57772e-12 \\
   \bottomrule
 \end{tabular}
 \end{table}
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time, allocations and relative $\ell_2$ error against the analytic adjoint ($N = 100$).}
   \label{tab:scaling-N100}
@@ -83,17 +83,17 @@
   \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{time\_s} & \textbf{alloc\_bytes} & \textbf{rel\_err} \\
   \textit{String} & \textit{String} & \textit{String} & \textit{Float64} & \textit{Int64} & \textit{Float64} \\
   \midrule
-  FD & - & - & 0.116405 & 113004928 & 6.72626e-7 \\
-  adjoint & - & reverse & 0.00106435 & 1324416 & 0.0 \\
-  naive & ForwardDiff & forward & 0.428056 & 1202579944 & 1.2677e-5 \\
-  naive & Mooncake & reverse & 0.320082 & 951243992 & 1.9828e-6 \\
-  naive & Zygote & reverse & 0.00594222 & 68566784 & 1.9828e-6 \\
-  ruled & Mooncake & reverse & 0.00196825 & 2447400 & 5.57336e-12 \\
-  ruled & Zygote & reverse & 0.00101235 & 1295856 & 5.57336e-12 \\
+  FD & - & - & 0.109589 & 113004928 & 6.72626e-7 \\
+  adjoint & - & - & 0.00104042 & 1324416 & 0.0 \\
+  naive & ForwardDiff & forward & 0.427547 & 1202579944 & 1.2677e-5 \\
+  naive & Mooncake & reverse & 0.34605 & 951243992 & 1.9828e-6 \\
+  naive & Zygote & reverse & 0.00619767 & 68566784 & 1.9828e-6 \\
+  ruled & Mooncake & reverse & 0.00211795 & 2447400 & 5.57336e-12 \\
+  ruled & Zygote & reverse & 0.00107512 & 1295856 & 5.57336e-12 \\
   \bottomrule
 \end{tabular}
 \end{table}
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{Time, allocations and relative $\ell_2$ error against the analytic adjoint ($N = 500$).}
   \label{tab:scaling-N500}
@@ -102,13 +102,13 @@
   \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{time\_s} & \textbf{alloc\_bytes} & \textbf{rel\_err} \\
   \textit{String} & \textit{String} & \textit{String} & \textit{Float64} & \textit{Int64} & \textit{Float64} \\
   \midrule
-  FD & - & - & 5.29439 & 13370617208 & 4.42725e-6 \\
-  adjoint & - & reverse & 0.00791274 & 27612248 & 0.0 \\
-  naive & ForwardDiff & forward & 86.2609 & 128850421472 & 6.87036e-6 \\
-  naive & Mooncake & reverse & 11.7867 & 20974668224 & 1.97759e-6 \\
-  naive & Zygote & reverse & 0.252095 & 1618399336 & 1.97759e-6 \\
-  ruled & Mooncake & reverse & 0.015671 & 54230416 & 5.57196e-12 \\
-  ruled & Zygote & reverse & 0.00783365 & 27459376 & 5.57196e-12 \\
+  FD & - & - & 5.50531 & 13370617208 & 4.42725e-6 \\
+  adjoint & - & - & 0.00797893 & 27612248 & 0.0 \\
+  naive & ForwardDiff & forward & 86.9046 & 128850421472 & 6.87036e-6 \\
+  naive & Mooncake & reverse & 12.7309 & 20974671856 & 1.97759e-6 \\
+  naive & Zygote & reverse & 0.306921 & 1618399336 & 1.97759e-6 \\
+  ruled & Mooncake & reverse & 0.0164108 & 54230416 & 5.57196e-12 \\
+  ruled & Zygote & reverse & 0.0081782 & 27459376 & 5.57196e-12 \\
   \bottomrule
 \end{tabular}
 \end{table}

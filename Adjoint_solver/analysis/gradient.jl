@@ -66,7 +66,7 @@ grad_ruled_zygote(p, V, ut, ops)   = zygote_gradient(v -> loss_real(p, v, ut), V
 
 #                 category    tool           mode        gradient(p, V, ut, ops)
 const METHODS = [("FD",      "-",           "-",       grad_fd),
-                 ("adjoint", "-",           "reverse", grad_adjoint),  # accuracy reference
+                 ("adjoint", "-",           "-",       grad_adjoint),  # analytic; accuracy reference
                  ("naive",   "ForwardDiff", "forward", grad_naive_forward),
                  ("naive",   "Mooncake",    "reverse", grad_naive_mooncake),
                  ("naive",   "Zygote",      "reverse", grad_naive_zygote),
@@ -115,9 +115,12 @@ function scaling_plot(df, col, ylab)
     plt
 end
 
-accuracy_plot(df) = bar(df.category .* " " .* df.tool, df.rel_err;
-                        yscale = :log10, ylabel = "rel. l² error vs adjoint",
-                        legend = false, xrotation = 45)
+function accuracy_plot(df)
+    sub = filter(:category => !=("adjoint"), df)   # drop the zero reference (no log of 0)
+    bar(sub.category .* " " .* sub.tool, sub.rel_err;
+        yscale = :log10, ylabel = "rel. l² error vs adjoint",
+        legend = false, xrotation = 45)
+end
 
 if abspath(PROGRAM_FILE) == abspath(@__FILE__)
     main()

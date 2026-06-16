@@ -101,8 +101,10 @@ end
     write_tables_by(datadir, name, df, by; columns = Not(by), caption = "", label = "tab:"*name)
 
 Write one booktabs LaTeX table per group of `df` (grouped on column `by`) into a
-single <datadir>/<name>.tex. Each group becomes its own `table` float, captioned
-with the group value and labelled `<label>-<by><value>`.
+single <datadir>/<name>.tex. Each group becomes its own `table`, captioned with the
+group value and labelled `<label>-<by><value>`. The `[H]` placement (float package)
+pins the tables in source order, so a long run of them stays put where included
+(e.g. in an appendix) instead of floating ahead of the surrounding text.
 """
 function write_tables_by(datadir, name, df, by::Symbol;
                          columns = Not(by), caption = "", label = "tab:" * name)
@@ -110,7 +112,7 @@ function write_tables_by(datadir, name, df, by::Symbol;
     open(joinpath(datadir, "$name.tex"), "w") do io
         for sub in groupby(df, by)
             key = sub[1, by]
-            println(io, "\\begin{table}[t]")
+            println(io, "\\begin{table}[H]")
             println(io, "  \\centering")
             println(io, "  \\caption{$caption (\$$by = $key\$).}")
             println(io, "  \\label{$label-$by$key}")
@@ -130,12 +132,16 @@ end
 "Stamp environment provenance into <datadir>/meta.tex for \\input in the report."
 function write_meta(datadir; packages = String[])
     mkpath(datadir)
-    vers = Dict(i.name => i.version for (_, i) in Pkg.dependencies() if i.name in packages)
-    git  = try readchomp(`git rev-parse --short HEAD`) catch; "n/a" end
+    git = try readchomp(`git rev-parse --short HEAD`) catch; "n/a" end
+    cpu = try Sys.cpu_info()[1].model catch; "unknown CPU" end
+    # `pkgversion` on the loaded module finds versions regardless of which stacked
+    # environment provides the package (Pkg.dependencies only sees the active project).
     open(joinpath(datadir, "meta.tex"), "w") do io
-        print(io, "Julia ", VERSION, ", BLAS threads ", BLAS.get_num_threads())
+        print(io, cpu, " (", Sys.CPU_THREADS, " threads); Julia ", VERSION,
+              ", BLAS threads ", BLAS.get_num_threads())
         for p in packages
-            haskey(vers, p) && print(io, ", $p ", vers[p])
+            m = try getfield(Main, Symbol(p)) catch; nothing end
+            m isa Module && print(io, ", $p ", pkgversion(m))
         end
         print(io, "; commit ", git, ", ", Dates.format(now(), "yyyy-mm-dd"), ".")
     end
