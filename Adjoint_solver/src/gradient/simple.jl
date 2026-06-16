@@ -1,32 +1,27 @@
-using Enzyme
+include("../problem.jl")
 
-## Finite Differences
-function FD(p::Problem, loss, V, target;eps=1e-8)
+using ForwardDiff, Mooncake, Zygote
+
+## Finite differences: one extra state solve per parameter (forward difference).
+function FD(p::Problem, loss, V, target; eps = 1e-8)
     grad = zeros(Float64, p.N)
+    base = loss(V, target)
     for i in 1:p.N
         V_i = copy(V); V_i[i] += eps
-        grad[i] = (loss(V_i, target) - loss(V, target)) / eps
+        grad[i] = (loss(V_i, target) - base) / eps
     end
     return grad
 end
 
+## Forward-mode AD: dual numbers, one tangent direction per parameter.
+forwarddiff_gradient(loss, V) = ForwardDiff.gradient(loss, V)
 
-## AD methods (forward/reverse) using Enzyme
-function Forward_AD(loss, V)
-    res = zeros(length(V))
-    for i in 1:length(V)
-        v = zeros(length(V))
-        v[i] = 1
-        (col,) = autodiff(set_runtime_activity(Forward), Const(loss), Duplicated(V, v))
-        res[i] = col
-    end
-    return res
-    # grad, = gradient(set_runtime_activity(Forward), loss, Duplicated(V); chunk=Val(8))
-    # return grad
-end
+## Reverse-mode AD (Zygote): one backward pass, rules consumed natively.
+zygote_gradient(loss, V) = first(Zygote.gradient(loss, V))
 
-function Backward_AD(loss, V)
-    v = zeros(length(V))
-    autodiff(set_runtime_activity(Reverse), Const(loss), Active,  Duplicated(V, v))
-    return v
+## Reverse-mode AD (Mooncake): one backward pass; grads = (∂loss/∂f, ∂loss/∂V).
+function mooncake_gradient(loss, V)
+    cache = Mooncake.prepare_gradient_cache(loss, V)
+    _, grads = Mooncake.value_and_gradient!!(cache, loss, V)
+    return grads[2]
 end

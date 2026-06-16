@@ -1,4 +1,5 @@
 using FFTW
+using LinearAlgebra
 ## Utilities
 ### Returns a N equally distanced points from a to b.
 function linspace(a::Number, b::Number, N::Integer)
@@ -6,7 +7,7 @@ function linspace(a::Number, b::Number, N::Integer)
     collect(a:h:b-h)
 end
 
-function l2norm(v::Vector{Float64})
+function l2norm(v::AbstractVector)
     return sqrt(sum(v.^2)/length(v))
 end
 function infnorm(v::Vector{Float64})
@@ -48,4 +49,11 @@ function cg_ad(applyA, b; M=x ->x, n_iter=1000, tol=1e-12)
         rz  = rz_new
     end
     return x
+end
+
+### Matrix-form entry point. Gives the ChainRules cg_ad rule (gradient/rules.jl)
+### a concrete method to attach to; just delegates to the function-form solver.
+function cg_ad(A::AbstractMatrix, b::AbstractVector; M = I, kwargs...)
+    applyM = M === I ? identity : (z -> M * z)
+    return cg_ad(x -> A * x, b; M = applyM, kwargs...)
 end

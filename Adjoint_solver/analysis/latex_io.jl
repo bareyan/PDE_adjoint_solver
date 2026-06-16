@@ -1,5 +1,3 @@
-# analysis/latex_io.jl
-#
 # Shared helpers for the analysis scripts (gradient_computation.jl, hessian.jl,
 # optimizers.jl, regularization.jl): benchmarking, and writing LaTeX-ready
 # tables / figures / provenance. Each analysis writes into its own <topic>_data/
@@ -27,14 +25,19 @@ end
     benchmark(f; seconds = 5) -> (value, time_s, alloc_bytes)
 
 Warm up `f` (a zero-argument closure), then return its value together with its
-minimum run time and allocation count. The universal building block for every
-timing study.
+minimum run time and allocation count from a single time-budgeted trial.
+
+`evals = 1` skips BenchmarkTools' auto-tuning, which would otherwise call `f`
+several times just to calibrate — fatal for the naive AD methods, where one
+evaluation can take minutes. Time and memory are read off the *same* trial, so a
+slow method costs about one warm-up plus one timed evaluation.
 """
 function benchmark(f; seconds = 5)
-    v = f()                                          # warm up + value
-    t = @belapsed $f() seconds = seconds
-    a = @ballocated $f()
-    return (value = v, time_s = t, alloc_bytes = a)
+    value = f()                                      # warm up (compile) + value
+    trial = @benchmark $f() samples = 100 evals = 1 seconds = seconds
+    return (value = value,
+            time_s = minimum(trial).time / 1e9,
+            alloc_bytes = minimum(trial).memory)
 end
 
 """
@@ -91,6 +94,30 @@ function write_table(datadir, name, df; kwargs...)
         pretty_table(io, df; backend = :latex,
                      table_format = PrettyTables.latex_table_format__booktabs,
                      kwargs...)
+    end
+end
+
+"""
+    write_tables_by(datadir, name, df, by; columns = Not(by), caption = "", label = "tab:"*name)
+
+Write one booktabs LaTeX table per group of `df` (grouped on column `by`) into a
+single <datadir>/<name>.tex. Each group becomes its own `table` float, captioned
+with the group value and labelled `<label>-<by><value>`.
+"""
+function write_tables_by(datadir, name, df, by::Symbol;
+                         columns = Not(by), caption = "", label = "tab:" * name)
+    mkpath(datadir)
+    open(joinpath(datadir, "$name.tex"), "w") do io
+        for sub in groupby(df, by)
+            key = sub[1, by]
+            println(io, "\\begin{table}[t]")
+            println(io, "  \\centering")
+            println(io, "  \\caption{$caption (\$$by = $key\$).}")
+            println(io, "  \\label{$label-$by$key}")
+            pretty_table(io, select(sub, columns); backend = :latex,
+                         table_format = PrettyTables.latex_table_format__booktabs)
+            println(io, "\\end{table}")
+        end
     end
 end
 
