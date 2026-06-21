@@ -1,0 +1,12 @@
+# Build artifacts: LaTeX aux/logs and the Julia run log (see Makefile)
+/build/
+
+# Stray LaTeX intermediates (the Makefile keeps these in build/, but ignore any
+# left over from a direct pdflatex run)
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc

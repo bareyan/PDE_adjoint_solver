@@ -1,0 +1,14 @@
+\begin{tabular}{rrrr}
+  \toprule
+  \textbf{category} & \textbf{tool} & \textbf{mode} & \textbf{rel\_err} \\
+  \textit{String} & \textit{String} & \textit{String} & \textit{Float64} \\
+  \midrule
+  FD & - & - & 4.42725e-6 \\
+  adjoint & - & - & 0.0 \\
+  naive & ForwardDiff & forward & 6.87036e-6 \\
+  naive & Mooncake & reverse & 1.97759e-6 \\
+  naive & Zygote & reverse & 1.97759e-6 \\
+  ruled & Mooncake & reverse & 5.57196e-12 \\
+  ruled & Zygote & reverse & 5.57196e-12 \\
+  \bottomrule
+\end{tabular}
