@@ -93,6 +93,7 @@ function write_table(datadir, name, df; kwargs...)
     open(joinpath(datadir, "$name.tex"), "w") do io
         pretty_table(io, df; backend = :latex,
                      table_format = PrettyTables.latex_table_format__booktabs,
+                     column_labels = [names(df)],   # header only — drop the type-annotation subrow
                      kwargs...)
     end
 end
@@ -116,8 +117,10 @@ function write_tables_by(datadir, name, df, by::Symbol;
             println(io, "  \\centering")
             println(io, "  \\caption{$caption (\$$by = $key\$).}")
             println(io, "  \\label{$label-$by$key}")
-            pretty_table(io, select(sub, columns); backend = :latex,
-                         table_format = PrettyTables.latex_table_format__booktabs)
+            sel = select(sub, columns)
+            pretty_table(io, sel; backend = :latex,
+                         table_format = PrettyTables.latex_table_format__booktabs,
+                         column_labels = [names(sel)])   # header only — drop the type-annotation subrow
             println(io, "\\end{table}")
         end
     end

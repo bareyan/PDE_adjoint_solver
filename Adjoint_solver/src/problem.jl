@@ -1,5 +1,3 @@
-include("utils.jl")
-
 struct Problem
     L::Float64
     N::Int64

@@ -40,10 +40,18 @@
 \begin{document}
 \maketitle
 
-\begin{abstract}
+\section{Introduction}
 \noindent
+We study the following nonlinear differential equation on the periodic interval $[0,2\pi]$:
+\begin{equation}
+  -u''(x) + \alpha u(x)^3 + V(x) u(x) = f(x), \qquad u(0)=u(2\pi),\ u'(0)=u'(2\pi),
+  \label{eq:nonlinear}
+\end{equation}
+where $V(x)$ is a potential and $f(x)$ is a forcing. We are interested in the inverse problem of recovering
+$V(x)$ of a given $u_{target}(x)$. 
+
 We compare methods for computing the gradient $g=\nabla_V I$ of the misfit
-\(I(V)=\int_0^{2\pi}\bigl(u(V)-u_0\bigr)^2\,dx\), where the state $u(V)$ solves
+\(I(V)=\int_0^{2\pi}\bigl(u(V)-u_{target}\bigr)^2\,dx\), where the state $u(V)$ solves
 the discretized nonlinear equation $F(u,V)=0$ by Newton's method. The state
 solve and the adjoint construction are implemented in the library; we study only
 the \emph{compute cost}, \emph{memory}, and \emph{accuracy} of the gradient, and
@@ -51,7 +59,6 @@ how each scales with the number of parameters $N$. We contrast finite difference
 automatic differentiation of the loss (forward and reverse), the hand-written
 adjoint, and AD equipped with a rule for the state solve, across the Julia AD
 libraries ForwardDiff, Zygote and Mooncake.
-\end{abstract}
 
 \section{Methods}
 \label{sec:methods}
@@ -67,7 +74,7 @@ computing it grows with $N$.
   \item \textbf{Forward-mode AD.} One tangent direction per pass, so $N$ passes.
   It propagates a dual number through the Newton iteration rather than unrolling
   it to scalars, so a pass costs a constant times one state solve:
-  machine-accurate, but $\mathcal O(N)$ like FD.
+  machine-accurate for an exact solver, but same order as FD in this case of iterative solvers. $\mathcal O(N)$ like FD.
   \item \textbf{Reverse-mode AD.} A single backward pass returns the whole
   gradient, but it traces the Newton iteration and stores every intermediate
   state, so memory grows with the iteration count.
@@ -75,7 +82,7 @@ computing it grows with $N$.
   operator at the converged solution (derived below): a fixed number of solves,
   independent of $N$, comparable to a single state solve. This is the reference.
   \item \textbf{Rule-based AD.} A custom rule for the \emph{state solve} makes the
-  AD tool insert the analytic adjoint --- a pullback for $u(V)$ --- instead of
+  AD tool insert the analytic adjoint \textbf{a pullback for $u(V)$} instead of
   differentiating the Newton iteration. Because the rule sits on the solver rather
   than on our particular loss, it is reusable and composes inside any larger
   differentiable pipeline, while running on the production solver.

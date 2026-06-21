@@ -1,7 +1,3 @@
-using LinearAlgebra
-using Optimisers
-using Optim
-
 abstract type Optimizer end
 
 Base.@kwdef struct OGradientDescent <: Optimizer
@@ -24,41 +20,42 @@ end
 
 function optimize end
 
-function optimize(o::OGradientDescent, loss, grad, V0; history_step=100)
+# `metric` is recorded into `hist` every `history_step` iterations (default: the loss),
+# so callers can track e.g. (loss, potential error) per iteration without re-running.
+function optimize(o::OGradientDescent, loss, grad, V0; history_step=100, metric=loss)
     V = copy(V0)
-    hist = Float64[]
-
+    hist = typeof(metric(V))[]
     for i in 1:o.n_iter
         g = grad(V)
         V .-= o.η .* g
         if(i % history_step==0)
-            push!(hist, loss(V))
+            push!(hist, metric(V))
         end
         norm(g, Inf) ≤ o.gtol && break
     end
     return V, hist
 end
-
-function optimize(o::OAdam, loss, grad, V0; history_step=100)
+ 
+function optimize(o::OAdam, loss, grad, V0; history_step=100, metric=loss)
     V = copy(V0)
-    hist = Float64[]
+    hist = typeof(metric(V))[]
     state = Optimisers.setup(Optimisers.Adam(o.η), V)
     for i in 1:o.n_iter
         g = grad(V)
         state, V = Optimisers.update(state, V, g)
         if(i % history_step==0)
-            push!(hist, loss(V))
+            push!(hist, metric(V))
         end
         norm(g, Inf) ≤ o.gtol && break
     end
     return V, hist
 end
-
-
-function optimize(o::OLBFGS, loss, grad, V0; history_step=1)
+ 
+function optimize(o::OLBFGS, loss, grad, V0; history_step=1, metric=loss)
     g!(G, V) = (G .= grad(V))
     res = Optim.optimize(loss, g!, V0, Optim.LBFGS(m = o.m),
                          Optim.Options(iterations = o.n_iter, g_abstol = o.gtol,
-                                       store_trace = true, extended_trace = false))
-    return res.minimizer, [t.value for t in Optim.trace(res)]
+                                       store_trace = true, extended_trace = true))
+    return res.minimizer, [metric(t.metadata["x"]) for t in Optim.trace(res)]
 end
+ 

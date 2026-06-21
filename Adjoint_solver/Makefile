@@ -9,7 +9,7 @@
 #   make clean           remove the build folder and all compiled PDFs
 #   make distclean       also remove the generated *_data/ folders
 #
-# REPORT is one of: gradient hessian optimizers regularization.
+# REPORT is one of: gradient optimizers.
 # LaTeX aux/logs and Julia run logs are kept out of the source tree, in build/
 # (gitignored); only the finished PDFs are copied back next to their .tex. A report
 # whose .tex has no \documentclass yet (an empty stub) is skipped, not an error.
@@ -19,7 +19,7 @@ LATEX   ?= pdflatex
 
 TEXDIR  := analysis
 BUILD   := $(CURDIR)/build
-REPORTS := gradient hessian optimizers regularization
+REPORTS := gradient optimizers
 
 # Convention: report NAME has source analysis/NAME.tex, script analysis/NAME.jl,
 # and data analysis/NAME_data/. Adding a report is just appending its name above.
@@ -37,8 +37,13 @@ all: data pdf
 # files are prerequisites (via secondary expansion of the %_data/ folder), so the
 # PDF rebuilds when its tables/figures change. Reports use \IfFileExists
 # placeholders, so they compile even before their data has been generated.
+#
+# Static pattern rule, scoped to $(PDFS): only the top-level reports are .pdf targets.
+# A bare `%.pdf` pattern would also match figures inside the data dirs (e.g.
+# optimizers_data/kappa_N.pdf, which has a sibling kappa_N.tex table), so make would try
+# to "build" the figure from the table fragment and then skip it — harmless but noisy.
 .SECONDEXPANSION:
-$(TEXDIR)/%.pdf: $(TEXDIR)/%.tex $$(wildcard $(TEXDIR)/$$*_data/*) | $(BUILD)
+$(PDFS): $(TEXDIR)/%.pdf: $(TEXDIR)/%.tex $$(wildcard $(TEXDIR)/$$*_data/*) | $(BUILD)
 	@if grep -q '\\documentclass' $<; then \
 	  ( cd $(TEXDIR) && $(LATEX) $(LATEXFLAGS) $*.tex && $(LATEX) $(LATEXFLAGS) $*.tex ) \
 	    && cp $(BUILD)/$*.pdf $@; \

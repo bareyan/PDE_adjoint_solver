@@ -1,3 +1,4 @@
+#####################################################################################
 # Compares gradient methods for the inverse problem (-u'' + αu³ + Vu = f):
 # finite differences, naive AD (forward/reverse), the hand adjoint, and rule-based
 # AD. Writes tables/figures/meta into gradient_data/ ; gradient.tex includes them.
@@ -8,6 +9,8 @@
 # so the iteration graph is AD-traceable. Its inner linear solve calls
 # the matrix-form cg_ad, which carries a custom rule (gradient/rules.jl), so
 # reverse-mode AD differentiates only the Newton iteration, never CG.
+#####################################################################################
+
 
 #### Setup
 const SRC = joinpath(@__DIR__, "..", "src")
@@ -125,3 +128,4 @@ end
 if abspath(PROGRAM_FILE) == abspath(@__FILE__)
     main()
 end
+# main()

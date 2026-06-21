@@ -1,6 +1,3 @@
-include("utils.jl")
-include("problem.jl")
-
 abstract type Regularizer end
 
 Base.@kwdef struct R1 <: Regularizer
@@ -29,11 +26,11 @@ end
 
 function grad_R(p::Problem, V, reg::R1)
     d1 = diff_fourier(V, p.ks)
-    return -reg.β * (p.L/p.N) .* diff_fourier(d1 ./ sqrt.(d1.^2 .+ reg.eps^2), p.ks)/p.N
+    return -reg.β * (p.L/p.N) .* diff_fourier(d1 ./ sqrt.(d1.^2 .+ reg.eps^2), p.ks)
 end
 
 function grad_R(p::Problem, V, reg::R2)
-    return - 2 * reg.β * (p.L/p.N) .* diff2_fourier(V, p.ks)/p.N
+    return - 2 * reg.β * (p.L/p.N) .* diff2_fourier(V, p.ks)
 end
 
 function grad_R(p::Problem, V, reg::NoReg)

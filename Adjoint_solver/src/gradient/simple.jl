@@ -1,7 +1,3 @@
-include("../problem.jl")
-
-using ForwardDiff, Mooncake, Zygote
-
 ## Finite differences: one extra state solve per parameter (forward difference).
 function FD(p::Problem, loss, V, target; eps = 1e-8)
     grad = zeros(Float64, p.N)
