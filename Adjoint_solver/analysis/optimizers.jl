@@ -23,7 +23,7 @@ using DataFrames, Plots
 const DATA   = joinpath(@__DIR__, "optimizers_data"); mkpath(DATA)
 
 #### Hyper Parameters
-const N      = 500
+const N      = 1000
 const α₀     = 10.0
 const TOL    = 1e-12      # "converged" loss
 const TARGET = 1e-6       # loss level for the time-to-target benchmark
@@ -121,8 +121,9 @@ function experiment_optimizers()
     df
 end
 
-# Exact Hessian H = (2L/N)(JᵀJ + S) at V, reusing the adjoint variable λ.  Closed-form because the only
-# nonlinearity is cubic (F_uu = 6αu, diagonal).  At V_true the residual is 0 ⇒ S = 0 ⇒ H = Gauss-Newton.
+# Full Hessian H = (2L/N)(JᵀJ + S) at the supplied V, reusing the adjoint variable λ. Closed-form
+# because the only nonlinearity is cubic (F_uu = 6αu, diagonal). The S terms are kept, so this is not
+# the Gauss-Newton approximation.
 function hessian_matrix(inst, V)
     n  = inst.p.N
     u  = Newton_solve(inst.p, V)
@@ -147,8 +148,11 @@ end
 function experiment_conditioning()
     df    = DataFrame(config = String[], κ = Float64[], pot_err = Float64[])
     spec  = plot(yscale = :log10, xlabel = "index", ylabel = "σ(H)", title = "Hessian spectrum", legend = :bottomleft)
-    recov = plot(WELL.p.x, WELL.Vtrue; label = "V_true", ls = :dash, c = :black, xlabel = "x", ylabel = "V",
-                 title = "recovered V (L-BFGS, unregularized)")
+    recov1 = plot(WELL.p.x, WELL.Vtrue; label = "V_true", ls = :dash, c = :black, xlabel = "x", ylabel = "V",
+                 title = "recovered V L-BFGS")
+    recov2 = plot(WELL.p.x, WELL.Vtrue; label = "V_true", ls = :dash, c = :black, xlabel = "x", ylabel = "V",
+    title = "recovered V Adam"
+    )
     for (name, inst) in (("well", WELL), ("ill", ILL))
         sp = spectrum(inst, inst.Vtrue)
         r  = runopt(inst, optimizer("lbfgs", 5000))
@@ -159,9 +163,12 @@ function experiment_conditioning()
         save_figure(DATA, "conditioning_hessian_$name", h)
         push!(df, (name, sp.κ, r.pot_err))
         plot!(spec, sort(sp.σ; rev = true); label = name)
-        plot!(recov, inst.p.x, r.V; label = "V* $name")
+        plot!(recov1, inst.p.x, r.V; label = "V* $name")
+        r2 = runopt(inst, optimizer("adam", 5000))
+        plot!(recov2, inst.p.x, r2.V; label = "V* $name")
     end
     save_figure(DATA, "conditioning_spectrum", spec)
+    recov = plot(recov1, recov2, layout=(1, 2), size=(900, 400))
     save_figure(DATA, "conditioning_recovered_V", recov)
     write_table(DATA, "conditioning", df)
     df
@@ -198,7 +205,7 @@ end
 # ============================================================================
 function experiment_regularization(instance; noise = 1e-4, tag = "")
     inst = noisy(instance; noise = noise)
-    βs   = 10.0 .^ range(-10, -2; length = 20)
+    βs   = 10.0 .^ range(-12, -2; length = 20)
     o    = optimizer("lbfgs", 1000)                  # bounded: noisy ⇒ no early-stop
 
     df    = DataFrame(method = String[], β = Float64[], misfit = Float64[], pot_err = Float64[])
@@ -282,7 +289,7 @@ function experiment_animation(inst, file; optim = "lbfgs", reg = NoReg(), budget
         plot(plot(inst.p.x, [V inst.Vtrue]; label = ["Vₖ" "V_true"], ylabel = "V", ylims = vlims, title = "iter $k / $(length(xs))"),
              plot(inst.p.x, [u inst.u_target]; label = ["u(Vₖ)" "u_target"], ylabel = "u", xlabel = "x", ylims = ulims), layout = (2, 1))
     end
-    gif(anim, joinpath(DATA, file); fps = div(length(xs), 10), progress = false)
+    gif(anim, joinpath(DATA, file); fps = div(length(xs), 10))
 end
 
 # ============================================================================
@@ -317,8 +324,9 @@ function main()
     experiment_alpha()
     experiment_kappa_N()
     
-    well_noisy = noisy(WELL, noise=1e-6)                       # well-conditioned but noisy => regularisation has a job to do
-    other_ill = instance(u_ill, α₀; V_fn = V_spike)
+    well_noisy = noisy(WELL, noise=1e-6)                       
+    
+    other_ill = instance(u_well, α₀; V_fn = V_spike)
 
     _, r1_opt, r2_opt = experiment_regularization(ILL)
     experiment_animation(WELL, "anim_well.gif")
@@ -327,11 +335,13 @@ function main()
     experiment_animation(well_noisy, "anim_well_reg2.gif"; reg = R2(β = r2_opt))
     experiment_animation(ILL, "anim_ill_reg1.gif"; reg = R1(β = r1_opt))
     experiment_animation(ILL, "anim_ill_reg2.gif"; reg = R2(β = r2_opt))
+    _, r1_opt, r2_opt = experiment_regularization(other_ill; tag = "_spike")
+
     experiment_animation(other_ill, "anim_spike_ill_reg1.gif"; reg = R1(β = r1_opt))
     experiment_animation(other_ill, "anim_spike_ill_reg2.gif"; reg = R2(β = r2_opt))
-e
+# e
 
-    experiment_direct(WELL; reg = R2(β = r2_opt), file = "direct_vs_optim_well")  # naive 1/u inversion vs L-BFGS (noises WELL internally)
+    experiment_direct(WELL; reg = R2(β = r2_opt), file = "direct_vs_optim_well")
 
     write_meta(DATA; packages = ["Optim"])
 end

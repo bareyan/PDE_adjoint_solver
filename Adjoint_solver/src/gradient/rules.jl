@@ -69,16 +69,16 @@ Mooncake.@from_rrule(Mooncake.DefaultCtx,
 #   V̄ = Ω̄ .* ∂Ω/∂V = Ω̄ .* grad_R(p, V, reg).
 # One generic rule covers R1 / R2 / NoReg because grad_R already dispatches on reg.
 
-# function ChainRulesCore.rrule(::typeof(R), p::Problem, V::AbstractVector, reg::Regularizer)
-#     Ω = R(p, V, reg)
-#     function R_pullback(ΔΩ)
-#         Ω_bar = unthunk(ΔΩ)
-#         Ω_bar isa AbstractZero && return (NoTangent(), NoTangent(), ZeroTangent(), NoTangent())
-#         V_bar = Ω_bar .* grad_R(p, V, reg)
-#         return (NoTangent(), NoTangent(), V_bar, NoTangent())
-#     end
-#     return Ω, R_pullback
-# end
+function ChainRulesCore.rrule(::typeof(R), p::Problem, V::AbstractVector, reg::Regularizer)
+    Ω = R(p, V, reg)
+    function R_pullback(ΔΩ)
+        Ω_bar = unthunk(ΔΩ)
+        Ω_bar isa AbstractZero && return (NoTangent(), NoTangent(), ZeroTangent(), NoTangent())
+        V_bar = Ω_bar .* grad_R(p, V, reg)
+        return (NoTangent(), NoTangent(), V_bar, NoTangent())
+    end
+    return Ω, R_pullback
+end
 
 Mooncake.@from_rrule(Mooncake.DefaultCtx,
                      Tuple{typeof(R), Any, AbstractVector, Regularizer})

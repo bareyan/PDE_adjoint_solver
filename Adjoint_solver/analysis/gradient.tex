@@ -50,8 +50,8 @@ We study the following nonlinear differential equation on the periodic interval 
 where $V(x)$ is a potential and $f(x)$ is a forcing. We are interested in the inverse problem of recovering
 $V(x)$ of a given $u_{target}(x)$. 
 
-We compare methods for computing the gradient $g=\nabla_V I$ of the misfit
-\(I(V)=\int_0^{2\pi}\bigl(u(V)-u_{target}\bigr)^2\,dx\), where the state $u(V)$ solves
+We compare methods for computing the gradient $g=\nabla_V M$ of the misfit
+\(M(V)=\int_0^{2\pi}\bigl(u(V)-u_{target}\bigr)^2\,dx\), where the state $u(V)$ solves
 the discretized nonlinear equation $F(u,V)=0$ by Newton's method. The state
 solve and the adjoint construction are implemented in the library; we study only
 the \emph{compute cost}, \emph{memory}, and \emph{accuracy} of the gradient, and
@@ -97,15 +97,15 @@ $\partial F/\partial V=\operatorname{diag}(u)$ (the term $Vu$ is linear in $V$),
   \quad\Longrightarrow\quad
   \delta u = -L^{-1}\operatorname{diag}(u)\,\delta V .
 \]
-The misfit varies as $\delta I = \tfrac{4\pi}{N}\langle u-u_0,\delta u\rangle$.
+The misfit varies as $\delta M = \tfrac{4\pi}{N}\langle u-u_0,\delta u\rangle$.
 Since $L$ is HPD, $L^{-1}$ is self-adjoint, so with the adjoint solve
 $L\lambda = u-u_0$,
 \[
-  \delta I
+  \delta M
   = -\tfrac{4\pi}{N}\langle L^{-1}(u-u_0),\operatorname{diag}(u)\,\delta V\rangle
   = \big\langle -\tfrac{4\pi}{N}\operatorname{diag}(u)\,\lambda,\ \delta V\big\rangle .
 \]
-Hence $\nabla_V I = -\tfrac{4\pi}{N}\operatorname{diag}(u)\,\lambda$: a single HPD
+Hence $\nabla_V M = -\tfrac{4\pi}{N}\operatorname{diag}(u)\,\lambda$: a single HPD
 (Krylov) solve at the converged $u$, independent of $N$.
 
 \paragraph{Differentiating the linear solve.}

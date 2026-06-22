@@ -1,9 +1,7 @@
 %=====================================================================
-%  Internship report — skeleton.
-%  Body / explanations are left as % TODO; figures and tables are wired
-%  to the files produced by optimizers.jl in optimizers_data/.
-%  Compile with pdflatex (Palatino).  Switch to fontspec + XeLaTeX if preferred.
-%  Assumes this file sits next to the optimizers_data/ directory.
+%  Internship report: conditioning, identifiability, regularization.
+%  Figures and tables are produced by optimizers.jl into optimizers_data/.
+%  Compile with pdflatex (run twice so cleveref cross-references resolve).
 %=====================================================================
 \documentclass[11pt,a4paper]{article}
 
@@ -15,14 +13,17 @@
 \usepackage{booktabs}                 % the write_table(...) outputs are booktabs tabulars
 \usepackage{subcaption}
 \usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
-\usepackage{float}                 % [H] placement for the appendix tables
+\usepackage{float}                    % [H] placement for the appendix tables
 
 % the generated tables carry literal Greek in their headers
 \usepackage{newunicodechar}
 \newunicodechar{κ}{\ensuremath{\kappa}}
 \newunicodechar{α}{\ensuremath{\alpha}}
 \newunicodechar{β}{\ensuremath{\beta}}
+
+\usepackage{cleveref}                 % load last, after hyperref
 
 \newcommand{\datadir}{optimizers_data}
 
@@ -35,9 +36,11 @@
 \maketitle
 
 \section{Goal}
-In this report we study the inverse problem of recovering a potential $V$ in a nonlinear PDE from a target state $u_0$.
-We analyze the conditioning of the problem, behaviour of the Hessian and solvers for different cases.
-We discuss optimization strategies and the challenges that arise from the ill-posedness of the problem, exploring the conditioning of the Hessian, the identifiability of the potential, and the role of regularization in obtaining meaningful solutions.
+We study the inverse problem of recovering a potential $V$ in a nonlinear PDE from a target state
+$u_0$. The report asks when this problem is solvable. We compare several optimizers on a
+well-conditioned and an ill-conditioned instance, trace the ill-conditioned failure to the Hessian of
+the misfit (its conditioning and a null space in $V$), and show how regularization restores a usable
+recovery.
 
 %=====================================================================
 \section{Problem setup}\label{sec:setup}
@@ -46,24 +49,24 @@ We consider the nonlinear PDE
 \[
 -u'' + \alpha u^3 + V u = f, \quad x \in [0, 2\pi], \qquad u(0) = u(2\pi),\quad u'(0) = u'(2\pi),
 \]
-where $u$ is the state, $V$ the potential to be recovered, $\alpha$ a nonlinearity parameter, and $f$ a source term.
-We recover $V$ from a given target state $u_0$ by minimizing the misfit functional
+where $u$ is the state, $V$ the potential to recover, $\alpha$ a nonlinearity parameter, and $f$
+a source term. We recover $V$ from a target state $u_0$ by minimizing the misfit
 \[
-I(V) = \int_0^{2\pi} (u(V) - u_0)^2 \, dx,
+M(V) = \int_0^{2\pi} (u(V) - u_0)^2 \, dx,
 \]
-where $u(V)$ is the solution of the PDE for the potential $V$.
+where $u(V)$ solves the PDE for $V$. We measure a recovery by the relative potential error
+$e(V) = \|V - V_\star\| / \|V_\star\|$.
 
-We use two instances: a well-conditioned one with $u_{\mathrm{well}} = 2 + \sin x$ (strictly positive) and an ill-conditioned one with $u_{\mathrm{ill}} = \sin x$ (sign-changing). The data is exact: for each instance we fix a true potential $V_\star$ and define the source term directly from the forward PDE,
+We use two instances, both with true potential $V_\star = 3 + \cos x$. The well-conditioned one
+takes $u_{\mathrm{well}} \propto 2 + \sin x$ (strictly positive); the ill-conditioned one takes
+$u_{\mathrm{ill}} \propto \sin x$ (sign-changing, with zeros at $x = 0$ and $x = \pi$). Each target
+is normalized to $\|u_0\|_{L^2} = 1$. The data are exact: instead of a forward solve, we fix $u_0$
+and back out the source from the PDE,
 \[
 f = -u_0'' + \alpha u_0^3 + V_\star\, u_0,
 \]
-so that $u_0$ solves the PDE for $V_\star$ exactly. We then run the inverse problem and measure the recovered $V$ against $V_\star$ (Figure~\ref{fig:instances}).
-% Inverse problem: recover $V$ from a target state $u_0$ by minimising
-%   $I(V) = \tfrac12\!\int_0^{2\pi} (u(V)-u_0)^2\,dx$.
-% Inverse-crime construction: pick $u$, normalise $\|u\|_{L^2}=1$, back out
-%   $f = -u'' + \alpha u^3 + V_\star u$ (no forward solve, exact data).
-% Two instances: $u_{\mathrm{well}} = 2+\sin x$ (strictly positive $\Rightarrow$ identifiable)
-% vs $u_{\mathrm{ill}} = \sin x$ (sign-changing, zeros at $0,\pi$ $\Rightarrow$ $\mathrm{diag}(u)$ singular).
+so $u_0$ solves the PDE for $V_\star$ by construction. We then recover $V$ and compare it to
+$V_\star$ (\cref{fig:instances}).
 
 \begin{figure}[H]
   \centering
@@ -80,59 +83,153 @@ so that $u_0$ solves the PDE for $V_\star$ exactly. We then run the inverse prob
 \end{figure}
 
 %=====================================================================
-\section{Adjoint gradient and exact Hessian}\label{sec:adjoint}
+\section{Adjoint gradient}\label{sec:adjoint}
 %=====================================================================
-To run a gradient-based optimizer we need the gradient of the misfit functional $I(V)$ with respect to $V$.
-As shown in Report~1, the adjoint method computes this gradient efficiently: the adjoint equation, derived from the forward PDE, yields the gradient without explicitly differentiating the solution $u(V)$ with respect to $V$.
-In our experiments we compute gradients with Zygote.jl automatic differentiation together with hand-written differentiation rules, which proved the most efficient and general method for our problem.
+To run a gradient-based optimizer we need the gradient of $M(V)$. Report~1 derives it by the
+adjoint method, which returns the gradient with one extra linear solve and without differentiating
+$u(V)$ directly. In the experiments we compute gradients with Zygote.jl automatic differentiation
+and adjoint-based rules, the most efficient and general option we found.
 
-We now make this concrete and push it one step further to the Hessian, the key object for the solvability and identifiability of the inverse problem.
-Discretize on $N$ equispaced points with quadrature weight $w = 2\pi/N$, and write the forward residual and the misfit as
-\[
-  \mathcal{F}(u, V) = -u'' + \alpha\,u^3 + V\odot u - f = 0,
-  \qquad
-  I(V) = w\,\|u(V) - u_0\|_2^2 .
-\]
-Linearizing $\mathcal{F}$ about the state gives two symmetric operators, the tangent operator and the control sensitivity,
-\[
-  L := \mathcal{F}_u = -\partial_{xx} + \mathrm{diag}\!\big(3\alpha u^2 + V\big),
-  \qquad
-  \mathcal{F}_V = \mathrm{diag}(u).
-\]
-Differentiating the constraint $\mathcal{F}\big(u(V), V\big) = 0$ yields the state sensitivity
-\[
-  J := \frac{\partial u}{\partial V} = -L^{-1}\,\mathrm{diag}(u).
-\]
-Introducing the adjoint state $\lambda$ defined by the single linear solve $L\lambda = u - u_0$, the chain rule collapses to
-\[
-  \nabla I = 2w\,J^\top (u - u_0) = -\tfrac{4\pi}{N}\,\mathrm{diag}(u)\,\lambda ,
-\]
-so the gradient costs one forward and one adjoint solve, independent of $\dim V$.
-
-\paragraph{Closed-form Hessian.}
-Differentiating $\nabla I$ once more and contracting the second-order state sensitivity against the adjoint (using $u - u_0 = L\lambda$) gives the exact Hessian
-\[
-  H = \tfrac{4\pi}{N}\big(\,\underbrace{J^\top J}_{\text{Gauss–Newton}} + S\,\big),
-  \qquad
-  S = -6\alpha\,J^\top \mathrm{diag}(u\odot\lambda)\,J - J^\top\mathrm{diag}(\lambda) - \mathrm{diag}(\lambda)\,J .
-\]
-The correction $S$ is symmetric and available in closed form precisely because the only nonlinearity is cubic, so $\mathcal{F}_{uu} = 6\alpha\,\mathrm{diag}(u)$ is diagonal and constant.
-Our data are exact, so at the minimizer the residual vanishes; then $u - u_0 \to 0 \Rightarrow \lambda \to 0 \Rightarrow S \to 0$, and the Hessian reduces to its Gauss–Newton form
-\[
-  H = \tfrac{4\pi}{N}\,J^\top J = \tfrac{4\pi}{N}\,\mathrm{diag}(u)\,L^{-2}\,\mathrm{diag}(u).
-\]
-This last expression drives the entire analysis: it is a smoothing kernel $L^{-2}$ modulated on both sides by the state $u$, and we read the conditioning (Section~\ref{subsec:conditioning}) and the identifiability of $V$ directly off it.
-\section{Analysis of numerical efficiency}\label{sec:analysis}
 %=====================================================================
+\section{Optimizer comparison: the identifiability gap}\label{sec:optimizers}
+%=====================================================================
+We compare three optimizers: gradient descent (GD), Adam, and L-BFGS. GD is the simplest. Adam adds
+adaptive step sizes and momentum; it is built for machine-learning problems but usually beats GD.
+L-BFGS is a quasi-Newton method that builds an inverse-Hessian approximation, which helps on
+ill-conditioned problems because it adapts to the local curvature.
+
+We run all three on both instances. First we use a fixed iteration budget and record the loss and
+the potential error $e(V)$ at each iteration (\cref{fig:optimizers}).
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.49\textwidth}\centering
+    \includegraphics[width=\textwidth]{\datadir/optimizers_loss_well.pdf}
+    \caption{Well-conditioned.}\label{fig:optimizers_well}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.49\textwidth}\centering
+    \includegraphics[width=\textwidth]{\datadir/optimizers_loss_ill.pdf}
+    \caption{Ill-conditioned.}\label{fig:optimizers_ill}
+  \end{subfigure}
+  \caption{Loss and potential error $e(V)$ versus iteration, for the well-conditioned (left) and
+           ill-conditioned (right) instances}
+  \label{fig:optimizers}
+\end{figure}
+Second we record the iterations and wall time each optimizer needs to reach a target loss, with the
+final loss and recovery error (\cref{tab:optimizers}).
+
+\begin{table}[H]
+  \centering
+  \input{\datadir/optimizers.tex}
+  \caption{Iterations and wall time to the target/converged loss, final loss, and recovery, per
+           optimizer.}
+  \label{tab:optimizers}
+\end{table}
+
+On the well-conditioned instance the methods that move recover $V$. L-BFGS is fastest and reaches
+the lowest loss (8 iterations, under a second). Adam is slower and stops short of L-BFGS, reaching a
+potential error of about $2\times10^{-4}$ at a loss near $10^{-10}$. GD is the slowest and least efficient: its curves are
+almost flat (\cref{fig:optimizers}). One fixed step size cannot move the stiff
+and the soft modes together, so the iterate is frozen.
+
+The ill-conditioned instance shows the gap. The loss still falls to near machine zero, but the
+potential error stalls: minimizing the misfit no longer recovers $V$. The ranking even inverts.
+L-BFGS reaches the lower loss (about $2\times10^{-11}$) but the worse potential
+($e(V) \approx 0.095$ in \cref{tab:optimizers}); Adam settles at a higher loss (about $10^{-9}$) but
+the better potential ($\approx 0.047$). For the ill-conditioned case we have problematic points: the zeros of $u_0$ at $x=0,\pi$. The gradient of our loss w.r.t.\ $V$ is a pointwise product of the state $u$ with the adjoint variable, so it stays null wherever $u$ vanishes; at convergence $u\approx u_0$, so $V$ cannot be updated there. A lower loss does not mean a better recovery. The reason is
+structural, we can see in the next plot \Cref{fig:recovered} how the different optimizers shape differently the outputs:
+The lbfgs optimized V has oscillations around the problematic points, while Adam is more straightforward and forms sharp spikes at those points.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.65\textwidth]{\datadir/conditioning_recovered_V.pdf}
+  \caption{Recovered $V$ : the ill-case error concentrates at the null points $x = 0, \pi$,
+           where the data cannot constrain $V$.}
+  \label{fig:recovered}
+\end{figure}
+
+%=====================================================================
+\section{The misfit Hessian: conditioning and identifiability}\label{sec:hessian}
+
+To analyze further the behaviour of optimization algorithms for this problem, we analyze the Hessian to  identify complexity of the optimization.
+%=====================================================================
+\subsection{Closed-form Hessian}\label{subsec:hessian}
+From Report~1 we have the linearisation $L = -\partial^2 + \mathrm{diag}(3\alpha u^2 + V)$
+and the sensitivity $J = -L^{-1}\mathrm{diag}(u)$. The misfit is
+\[
+M(V) = \frac{w}{2}\|u(V) - u_0\|^2,
+\]
+with residual $r = u - u_0$ and $w = 4\pi/N$, so that $M$ is the trapezoidal form of the integral in \cref{sec:setup}. By the adjoint method,
+\[
+\nabla M = w\,J^\top r = -w\,\mathrm{diag}(u)L^{-1}r = -w\,\mathrm{diag}(u)\,\lambda,
+\]
+where $\lambda = L^{-1}r$ is the adjoint state.
+Differentiate $\nabla M = w\,J^\top r$ using the product rule:
+\[
+H\,\delta V = \dot{(\nabla M)} = w\big[\,\dot{(J^\top)}\,r + J^\top\dot r\,\big].
+\]
+
+The easy term: $\dot r = \delta u = J\,\delta V$, so
+\[
+J^\top\dot r = J^\top J\,\delta V \qquad\text{(Gauss--Newton term)}.
+\]
+
+The hard term uses $J^\top = -\mathrm{diag}(u)L^{-1}$. By the product rule and the inverse rule on $L^{-1}$:
+\[
+\dot{(J^\top)} = -\mathrm{diag}(\delta u)L^{-1} + \mathrm{diag}(u)L^{-1}\dot L\,L^{-1}.
+\]
+Applying this to $r$ and using $L^{-1}r = \lambda$:
+\[
+\dot{(J^\top)}\,r = -\mathrm{diag}(\delta u)\,\lambda + \mathrm{diag}(u)L^{-1}\dot L\,\lambda.
+\]
+
+Simplify each piece. For the first: $\mathrm{diag}(\delta u)\lambda = \mathrm{diag}(\lambda)\delta u = \mathrm{diag}(\lambda)J\,\delta V$.
+For the second, expand $\dot L\,\lambda$ using $\dot L = \mathrm{diag}(6\alpha\,u\odot\delta u + \delta V)$:
+\[
+\dot L\,\lambda = 6\alpha\,\mathrm{diag}(u\odot\lambda)\,\delta u + \mathrm{diag}(\lambda)\,\delta V.
+\]
+Then $\mathrm{diag}(u)L^{-1}\dot L\,\lambda = -J^\top[\,6\alpha\,\mathrm{diag}(u\odot\lambda)J\,\delta V + \mathrm{diag}(\lambda)\,\delta V\,]$.
+
+Combine both parts of the hard term:
+\[
+\dot{(J^\top)}\,r = -\mathrm{diag}(\lambda)J\,\delta V - 6\alpha\,J^\top\mathrm{diag}(u\odot\lambda)J\,\delta V - J^\top\mathrm{diag}(\lambda)\,\delta V.
+\]
+
+Assemble the full Hessian by adding the Gauss--Newton term and the hard term:
+\[
+H\,\delta V = w\big[\,J^\top J - 6\alpha\,J^\top\mathrm{diag}(u\odot\lambda)J - J^\top\mathrm{diag}(\lambda) - \mathrm{diag}(\lambda)J\,\big]\delta V.
+\]
+
+Thus
+\[
+H = w\,(J^\top J + S),
+\qquad
+S = -6\alpha\,J^\top\mathrm{diag}(u\odot\lambda)J - J^\top\mathrm{diag}(\lambda) - \mathrm{diag}(\lambda)J.
+\]
+The term $J^\top J$ is the Gauss--Newton component; every term in $S$ carries $\lambda$ and thus depends on the residual $r$.
+The Hessian is symmetric.
+
+
 \subsection{Conditioning and identifiability}\label{subsec:conditioning}
-%=====================================================================
-We visualize the Hessian $H$ at the true potential both in position space (Figure~\ref{fig:hessian}) and through its spectrum (Figure~\ref{fig:spectrum}).
-The reading follows directly from $H = \tfrac{4\pi}{N}\,\mathrm{diag}(u)\,L^{-2}\,\mathrm{diag}(u)$, whose $(i,j)$ entry is $\tfrac{4\pi}{N}\,u_i\,(L^{-2})_{ij}\,u_j$.
+We plot the computed Hessian in position space (\cref{fig:hessian})
+and its spectrum (\cref{fig:spectrum}). The Gauss--Newton component 
+whose $(i,j)$ entry is $\tfrac{4\pi}{N}\,u_i\,(L^{-2})_{ij}\,u_j$ explains the
+smoothing band and the loss of identifiability at zeros of $u$
 
-For the well-conditioned instance ($u_{\mathrm{well}} = 2 + \sin x > 0$) the modulation $\mathrm{diag}(u)$ is invertible, so $H$ inherits the full rank of $L^{-2}$ and its spectrum decays smoothly.
-The decay is itself meaningful: $L^{-2}$ damps high-frequency modes of $V$, so these directions are only weakly constrained by the data, but none of them is lost. Every direction in $V$ is identifiable.
+For the well-conditioned instance ($u_{\mathrm{well}} \propto 2 + \sin x > 0$) the factor
+$\mathrm{diag}(u)$ is invertible, so the Gauss--Newton component has the full rank of $L^{-2}$ and
+the Hessian spectrum decays
+smoothly. The decay still matters: $L^{-2}$ damps high-frequency modes of $V$, so those directions
+are weakly constrained, but none is lost. Every direction in $V$ is identifiable.
 
-For the ill-conditioned instance the spectrum drops off a cliff to machine zero --- a genuine null space, not a numerical artifact. The mechanism is the modulation by $u$. The target $u_{\mathrm{ill}} = \sin x$ vanishes at $x = 0$ and $x = \pi$, so the corresponding rows and columns of $H$ are identically zero; these are the dead cross-bands punched through the smoothing kernel in Figure~\ref{fig:H-ill}. Equivalently, the adjoint gradient $-\tfrac{4\pi}{N}\,(u\odot\lambda)$ carries a factor of $u$ and cannot move $V$ wherever $u = 0$. Along these directions the misfit is exactly flat: the data say nothing about $V$ at the zeros of $u$, and the problem is non-identifiable there. (The recovered $V$ that exposes this is shown after the optimizer test, Figure~\ref{fig:recovered}.)
+For the ill-conditioned instance the spectrum drops to machine zero, a null space. The cause is the
+factor $u$: $u_{\mathrm{ill}} \propto \sin x$ vanishes at $x = 0$ and $x = \pi$, so the matching rows
+and columns of the Gauss--Newton component are zero, the dead cross-bands in \cref{fig:H-ill}. The
+same factor appears in the
+gradient $-\tfrac{4\pi}{N}\,(u\odot\lambda)$, which cannot move $V$ where $u = 0$. The misfit is flat
+along these directions, so the data do not constrain $V$ at the zeros of $u$, and the problem is
+non-identifiable there. This is exactly the failure seen in \cref{sec:optimizers}:
+\cref{fig:recovered} shows the recovered $V$ matching $V_\star$ except at $x = 0, \pi$.
+
 \begin{figure}[H]
   \centering
   \begin{subfigure}{0.49\textwidth}
@@ -141,18 +238,16 @@ For the ill-conditioned instance the spectrum drops off a cliff to machine zero 
   \end{subfigure}\hfill
   \begin{subfigure}{0.49\textwidth}
     \includegraphics[width=\textwidth]{\datadir/conditioning_hessian_ill.pdf}
-    \caption{$\log|H|$, ill — dead cross-bands at $u$'s zeros.}\label{fig:H-ill}
+    \caption{$\log|H|$, ill: dead cross-bands at $u$'s zeros.}\label{fig:H-ill}
   \end{subfigure}
-  \caption{Hessian magnitude in position space. The band is the $L^{-2}$ smoothing kernel; the ill case
-           is punched through at $x=0,\pi$ — the null directions.}
+  \caption{Hessian magnitude in position space}
   \label{fig:hessian}
 \end{figure}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.65\textwidth]{\datadir/conditioning_spectrum.pdf}
-  \caption{Hessian spectrum for both instances: a shared smoothing decay, plus a cliff to machine zero
-           in the ill case.}
+  \caption{Hessian spectrum for both instances}
   \label{fig:spectrum}
 \end{figure}
 
@@ -163,19 +258,30 @@ For the ill-conditioned instance the spectrum drops off a cliff to machine zero 
   \label{tab:conditioning}
 \end{table}
 
-%=====================================================================
 \subsection{Dependence on nonlinearity and resolution}\label{subsec:dependence}
-%=====================================================================
-Two knobs change the problem without changing its character: the nonlinearity parameter $\alpha$ and the mesh resolution $N$. They act on different parts of $H = \tfrac{4\pi}{N}\,\mathrm{diag}(u)\,L^{-2}\,\mathrm{diag}(u)$, so we sweep them separately.
+The nonlinearity $\alpha$ and the resolution $N$ change the problem without changing its kind. They
+act on different parts of the full Hessian. The smoothing and rank effects are already visible in
+the Gauss--Newton component so we sweep them separately.
 
 \subsubsection{Nonlinearity $\alpha$}
-The parameter $\alpha$ enters $H$ only through $L = -\partial_{xx} + \mathrm{diag}(3\alpha u^2 + V)$, a bounded perturbation of the diagonal. It does not create or remove zeros of $u$, which is what controls the rank. We therefore expect the condition number $\kappa$ to be largely insensitive to $\alpha$, and that is exactly what the sweep shows (Figure~\ref{fig:alpha}, Tables): the well-conditioned instance stays well-conditioned and the ill-conditioned instance stays singular across the whole range. Increasing the nonlinearity does not change the qualitative nature of either problem.
+$\alpha$ enters the full Hessian through $L = -\partial_{xx} + \mathrm{diag}(3\alpha u^2 + V)$ and
+through the correction $S$. A larger $\alpha$ adds $3\alpha u^2$ to the diagonal of $L$, lifting its
+smallest eigenvalues (the smooth, low-frequency modes, where the $-\partial_{xx}$ term is weak),
+while the largest eigenvalue, set by $-\partial_{xx}$ at $O(N^2)$, is essentially unchanged. So
+$\kappa(L) = \lambda_{\max}/\lambda_{\min}$ shrinks as $\lambda_{\min}$ rises, and since $H$ carries
+$L^{-2}$ the conditioning of $H$ drops with it. The sweep confirms this
+for the well case: $\kappa$ falls about three orders of magnitude, from $3.7\times10^{10}$ at
+$\alpha = 0.5$ to $1.6\times10^{7}$ at $\alpha = 500$ (\cref{fig:alpha}, \cref{tab:alpha}), while the
+Newton solve stiffens and needs more iterations. The ill case behaves differently: $\mathrm{diag}(u)$
+is singular at every $\alpha$, so $\kappa$ stays near $10^{28}$ and the recovery error stays around
+$0.08$ to $0.10$. Nonlinearity improves the conditioning of the well problem but does not remove the
+null space of the ill one.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.6\textwidth]{\datadir/alpha_kappa.pdf}
-  \caption{Condition number $\kappa$ versus nonlinearity $\alpha$, both instances. Each curve is essentially
-           flat: $\kappa$ barely responds to $\alpha$.}
+  \caption{Condition number $\kappa$ versus nonlinearity $\alpha$. The well case falls about three
+           orders of magnitude; the ill case stays near $10^{28}$.}
   \label{fig:alpha}
 \end{figure}
 
@@ -194,18 +300,22 @@ The parameter $\alpha$ enters $H$ only through $L = -\partial_{xx} + \mathrm{dia
 \end{table}
 
 \subsubsection{Resolution $N$}
-Resolution acts on the smoothing kernel $L^{-2}$ itself. The eigenvalues of $L \approx -\partial_{xx}$ range from $O(1)$ for the smoothest mode up to $O(N^2)$ for the highest frequency the grid can represent, so the eigenvalues of $L^{-2}$ range from $O(1)$ down to $O(N^{-4})$. For the well-conditioned instance $\mathrm{diag}(u)$ is a bounded, invertible modulation that does not change this scaling, hence
+Resolution acts on $L^{-2}$. The eigenvalues of $L \approx -\partial_{xx}$ run from $O(1)$ for the
+smoothest mode to $O(N^2)$ for the highest mode the grid resolves, so those of $L^{-2}$ run from
+$O(1)$ down to $O(N^{-4})$. For the well case $\mathrm{diag}(u)$ is bounded and invertible and does
+not change this, so
 \[
   \kappa(H) \sim N^4 ,
 \]
-the clean quartic growth seen in Figure~\ref{fig:kappaN}. This is intrinsic ill-posedness rather than a discretization defect: refining the mesh exposes ever finer, ever less constrained modes of $V$.
-For the ill-conditioned instance the null space already makes $\kappa$ effectively infinite (numerically bounded only by round-off); it does not follow the $N^4$ law and does not settle, oscillating at a high value as the machine-zero floor shifts with $N$.
+the straight line in \cref{fig:kappaN}. A finer mesh exposes finer, less constrained modes of $V$. The ill case
+has $\kappa$ near $10^{30}$ at every $N$, set by the null space and the round-off floor, with no
+clean trend.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.6\textwidth]{\datadir/kappa_N.pdf}
-  \caption{Condition number $\kappa$ versus resolution $N$. The well case grows as $N^4$; the ill case
-           stays high and irregular.}
+  \caption{Condition number $\kappa$ versus resolution $N$. The well case grows as $N^4$; the ill
+           case stays high and irregular.}
   \label{fig:kappaN}
 \end{figure}
 
@@ -215,78 +325,45 @@ For the ill-conditioned instance the null space already makes $\kappa$ effective
   \caption{$N$-sweep (resolution) conditioning data.}
   \label{tab:kappaN}
 \end{table}
-%=====================================================================
-\section{Optimizer comparison: the identifiability gap}\label{sec:optimizers}
-%=====================================================================
-We compare three optimizers: gradient descent (GD), Adam, and L-BFGS.
-Gradient descent is the simplest method.
-Adam is more sophisticated, using adaptive learning rates and momentum to accelerate convergence; it is designed primarily for machine-learning problems but outperforms GD in most settings.
-L-BFGS is a quasi-Newton method that approximates the inverse Hessian, and is particularly effective on ill-conditioned problems because it adapts to the local curvature.
-
-We compare the optimizers on both instances.
-First, we run each optimizer for a fixed iteration budget and track the loss and the potential error $\|V - V_\star\| / \|V_\star\|$ at every iteration (Figure~\ref{fig:optimizers}).
-\begin{figure}[H]
-  \centering
-  \begin{subfigure}{0.49\textwidth}\centering
-    \includegraphics[width=\textwidth]{\datadir/optimizers_loss_well.pdf}
-    \caption{Well-conditioned.}\label{fig:optimizers_well}
-  \end{subfigure}\hfill
-  \begin{subfigure}{0.49\textwidth}\centering
-    \includegraphics[width=\textwidth]{\datadir/optimizers_loss_ill.pdf}
-    \caption{Ill-conditioned.}\label{fig:optimizers_ill}
-  \end{subfigure}
-  \caption{Loss (left) and potential error $\|V-V_\star\|/\|V_\star\|$ (right) vs.\ iteration, for the
-           well-conditioned (left) and ill-conditioned (right) instances. On the ill case the loss keeps
-           falling while the potential error stalls.}
-  \label{fig:optimizers}
-\end{figure}
-Second, we record how many iterations and how much wall-clock time each optimizer needs to reach a target loss, together with the final loss and recovery error (Table~\ref{tab:optimizers}).
-
-\begin{table}[H]
-  \centering
-  \input{\datadir/optimizers.tex}
-  \caption{Iterations and wall time to the target/converged loss, final loss, and recovery, per optimizer.}
-  \label{tab:optimizers}
-\end{table}
-
-
-On the well-conditioned instance every method that moves at all recovers $V$: L-BFGS converges fastest and reaches the lowest loss (a few iterations, well under a second), while Adam is slower but still drives both the loss and the potential error to zero.
-Gradient descent, by contrast, never makes progress --- its curves are flat (Figure~\ref{fig:optimizers}). This is a conditioning-driven failure rather than a coding one: with $\kappa(H)$ as large as it is (Section~\ref{subsec:dependence}), a single fixed step size cannot move the stiff and the soft modes at once, so the iterate is effectively frozen.
-
-The ill-conditioned instance exposes the central point. Here the loss still falls to near machine zero, yet the potential error \emph{stalls} --- minimising the misfit no longer recovers $V$. The ranking even inverts: L-BFGS reaches the lowest loss but the \emph{worst} potential ($\|V-V_\star\|/\|V_\star\|\approx 0.087$ in Table~\ref{tab:optimizers}), whereas Adam settles at a higher loss but a \emph{better} potential ($\approx 0.047$). A lower loss therefore does not imply a better recovery.
-The cause is structural, not algorithmic: the misfit is flat along the null directions of the Hessian (Section~\ref{subsec:conditioning}), so an optimiser is free to place arbitrary mass there. Figure~\ref{fig:recovered} makes this concrete --- the recovered $V$ matches $V_\star$ everywhere except for spikes at $x=0,\pi$, exactly the zeros of $u$ where $\mathrm{diag}(u)$ is singular and the data cannot constrain $V$. Fixing this needs a prior, not a better optimiser --- the subject of Section~\ref{sec:regularization}.
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.65\textwidth]{\datadir/conditioning_recovered_V.pdf}
-  \caption{Recovered $V$ (L-BFGS, unregularised): the ill-case error concentrates at the null points
-           $x=0,\pi$, where the data cannot constrain $V$.}
-  \label{fig:recovered}
-\end{figure}
 
 %=====================================================================
 \section{Regularization}\label{sec:regularization}
 %=====================================================================
-Regularization addresses several distinct problems at once. It stabilizes the inversion when the data $u_0$ are measured with noise; it injects prior knowledge about the potential, such as smoothness or sparsity; and it removes the ambiguity along the null directions of the Hessian by penalizing the otherwise-free modes, so that $V$ can be recovered even where the data are blind to it.
+Regularization helps in three ways. It stabilizes the inversion when $u_0$ is noisy; it adds prior
+knowledge about $V$, such as smoothness or sparsity; and it fills in the null directions of the
+Hessian, so $V$ can be recovered where the data alone cannot constrain it.
 
-The need is sharpest under noise. We perturb the data $u_0$ by an amount of order $10^{-6}$ --- invisible to the naked eye (Figure~\ref{fig:direct}, right) --- and attempt the naive pointwise inversion that solves the PDE algebraically for $V$,
+Noise makes the need clear. We perturb $u_0$ by about $10^{-6}$, too small to see (\cref{fig:direct},
+right), and try the pointwise inversion that solves the PDE for $V$ directly,
 \[
   V_{\mathrm{direct}} = \frac{f + u'' - \alpha u^3}{u}.
 \]
-This differentiates the noisy $u$ twice, and the $u''$ term amplifies a Fourier mode of wavenumber $k$ by a factor $k^2$. The high-frequency noise is blown up and the reconstruction is destroyed (Figure~\ref{fig:direct}, left). The variational recovery $V^\star$, on the other hand, never differentiates the data and tracks $V_\star$ faithfully --- which is why optimisation, not algebra, is the right tool here.
+This differentiates the noisy $u$ twice, and the $u''$ term scales a Fourier mode of wavenumber $k$
+by $k^2$, so the high-frequency noise is amplified and $V_{\mathrm{direct}}$ is too noisy to use
+(\cref{fig:direct}, left). The variational recovery $V^\star$ never differentiates the data and
+stays close to $V_\star$.
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.9\textwidth]{\datadir/direct_vs_optim_well.pdf}
-  \caption{Why optimisation is needed. Left: the pointwise algebraic inversion
-           $V_{\mathrm{direct}}=(f+u''-\alpha u^3)/u$ on noisy well-conditioned data is wrecked by the
-           $u''$ term (which amplifies the noise by $k^2$), whereas the L-BFGS recovery $V^\star$ tracks
-           $V_\star$. Right: the noise added to the data $u$ is invisible to the naked eye.}
+  \caption{Left: the pointwise inversion 
+           $V_{\mathrm{direct}} = (f + u'' - \alpha u^3)/u$ and L-BFGS recovery on noisy well-conditioned data
+          Right: the added noise is invisible to the naked eye.}
   \label{fig:direct}
 \end{figure}
 
-The penalty we add must match the structure of the unknown. We compare two choices, each weighted by $\beta$ and added to the misfit: Tikhonov, $R_2(V) = \beta\,\|V'\|_2^2$, which rewards smoothness, and total variation (TV), $R_1(V) = \beta\,\|V'\|_1$, which rewards piecewise-constant structure with sharp edges. Which one wins depends entirely on the truth $V_\star$.
+The penalty has to match the unknown. We compare two, each scaled by $\beta$ and added to the misfit:
+\begin{enumerate}
+  \item Tikhonov $R_2(V) = \beta\,\|V'\|_2^2$: favors smoothness
+  \item Total variation $R_1(V) = \beta\,\|V'\|_1$: favors piecewise-constant shapes with sharp edges
+\end{enumerate}
+Which one wins depends on $V_\star$. For a smooth $V_\star$ (a cosine) Tikhonov matches the prior and reaches about
+$85\times$ lower error than TV at the best $\beta$ (\cref{fig:reg-smooth}, \cref{tab:regularization});
+at $\beta^\star$ it also removes the null-point spikes of \cref{sec:optimizers}. 
 
-For a smooth $V_\star$ (a cosine) Tikhonov matches the prior: sweeping $\beta$, it reaches an order of magnitude lower error than TV (Figure~\ref{fig:reg-smooth}, Table~\ref{tab:regularization}), and at the optimal weight $\beta^\star$ it simultaneously lowers the error and despikes the null-point artifacts of Section~\ref{sec:optimizers}. For a non-smooth $V_\star$ (a box/spike) the ranking flips: TV preserves the edges that Tikhonov smears out (Figure~\ref{fig:reg-spike}). The lesson is that regularization helps precisely when its penalty encodes the right structure of the unknown --- it supplies the information the data cannot.
+For a box $V_\star$
+(a top-hat) the order flips: TV keeps the edges that Tikhonov smooths out (\cref{fig:reg-spike}).
+Regularization helps when the penalty matches the structure of the unknown, supplying what the data
+leave undetermined.
 
 \begin{figure}[H]
   \centering
@@ -298,9 +375,27 @@ For a smooth $V_\star$ (a cosine) Tikhonov matches the prior: sweeping $\beta$, 
     \includegraphics[width=\textwidth]{\datadir/regularization_despiking.pdf}
     \caption{Despiking at $\beta^\star$.}\label{fig:reg-despike}
   \end{subfigure}
-  \caption{Smooth $V_\star$ (cos): Tikhonov reaches the lower error and reconstructs the smooth potential.}
+  \caption{Smooth $V_\star$ (cosine): Tikhonov reaches the lower error and reconstructs the smooth
+           potential.}
   \label{fig:reg-smooth}
 \end{figure}
+
+\begin{table}[H]
+  \centering
+  \begin{minipage}{0.49\textwidth}\centering
+    \resizebox{\linewidth}{!}{\input{\datadir/regularization_summary.tex}}\\[2pt]
+    {\small smooth $V_\star$}
+  \end{minipage}\hfill
+  \begin{minipage}{0.49\textwidth}\centering
+    \resizebox{\linewidth}{!}{\input{\datadir/regularization_summary_spike.tex}}\\[2pt]
+    {\small box $V_\star$}
+  \end{minipage}
+  \caption{Best regularization weight $\beta^\star$ (the value minimizing the potential error) for smooth and box $V_\star$.}
+  \label{tab:regularization}
+\end{table}
+
+
+
 
 \begin{figure}[H]
   \centering
@@ -310,35 +405,19 @@ For a smooth $V_\star$ (a cosine) Tikhonov matches the prior: sweeping $\beta$, 
   \end{subfigure}\hfill
   \begin{subfigure}{0.49\textwidth}
     \includegraphics[width=\textwidth]{\datadir/anim_spike_ill_reg2_final.pdf}
-    \caption{Tikhonov ($R_2$): edges smeared.}\label{fig:reg-spike-tik}
+    \caption{Tikhonov ($R_2$): edges smoothed.}\label{fig:reg-spike-tik}
   \end{subfigure}
-  \caption{Non-smooth $V_\star$ (spike), converged $V^\star$ (top) and state $u(V^\star)$ (bottom):
-           the winner flips — TV preserves the edges, Tikhonov smears them.}
+  \caption{Box $V_\star$, converged $V^\star$ (top) and state $u(V^\star)$ (bottom): TV keeps the
+           edges, Tikhonov smooths them.}
   \label{fig:reg-spike}
 \end{figure}
 
-\begin{table}[H]
-  \centering
-  \input{\datadir/regularization_summary.tex}
-  \caption{Optimal regularisation weight $\beta^\star$ (the value minimising the potential error over the
-           $\beta$-sweep of Figure~\ref{fig:reg-smooth}a), with the resulting misfit and recovery error,
-           for the smooth $V_\star$. Tikhonov ($R_2$) reaches an order of magnitude lower error than TV ($R_1$).}
-  \label{tab:regularization}
-\end{table}
 
-%=====================================================================
-\section{Conclusion}\label{sec:conclusion}
-%=====================================================================
-% TODO — recap: the adjoint gradient solves the well case; the ill case is non-identifiable because
-% $u$'s zeros make a subspace of $V$ invisible to the data; this ill-posedness is intrinsic (sharpens
-% as $N^4$) and is resolved only by a prior matched to the structure of $V_\star$.
 
 %=====================================================================
 \appendix
 \section{Reproducibility}\label{sec:repro}
 %=====================================================================
-% TODO — code: optimizers.jl. Hardware/software stamp below (adjust the filename if write_meta
-% emits something other than meta.tex).
 \input{\datadir/meta.tex}
 
 \end{document}
